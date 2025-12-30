@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Study Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+    <h1>Your Courses</h1>
+
+    <form action="/add_course" method="post">
+        <input name="name" placeholder="Course name" required>
+        <button type="submit">Add Course</button>
+    </form>
+
+    <div class="course-grid">
+        {% for c in courses %}
+        <div class="course-card">
+            <img src="{{ url_for('static', filename=c[2]) }}" alt="icon" class="course-icon">
+            <p>{{ c[1] }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+
+</div>
+
+</body>
+</html>
