@@ -68,6 +68,39 @@ def add_course():
 
     return redirect('/')
 
+#course opened
+@app.route('/course/<int:course_id>')
+def course_page(course_id):
+    conn = sqlite3.connect('study.db')
+    c = conn.cursor()
+
+    # get course info
+    c.execute("SELECT * FROM courses WHERE id = ?", (course_id,))
+    course = c.fetchone()
+
+    # get all sessions for this course
+    c.execute("SELECT * FROM sessions WHERE course_id = ?", (course_id,))
+    sessions = c.fetchall()
+
+    conn.close()
+    return render_template('course.html', course=course, sessions=sessions)
+
+
+#add session
+@app.route('/add_session/<int:course_id>', methods=['POST'])
+def add_session_for_course(course_id):
+    study_type = request.form['type']
+    duration = int(request.form['duration'])
+
+    conn = sqlite3.connect('study.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO sessions (course_id, type, duration) VALUES (?, ?, ?)",
+              (course_id, study_type, duration))
+    conn.commit()
+    conn.close()
+
+    return redirect(f'/course/{course_id}')
+
 
 
 if __name__ == "__main__":

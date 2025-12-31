@@ -99,7 +99,7 @@ th {
 
 .course-card p {
     margin: 5px 0 0 0;
-    padding: 0 10px;
+    padding: 0px 0px 6px 0px;
     font-size: 18px;
     font-weight: 500;
     flex-grow: 1;            /* fills remaining space if needed */
@@ -107,6 +107,21 @@ th {
     align-items: center;     /* vertically center text in remaining space */
     justify-content: center;
 }
+
+button {
+    background-color: black;  
+    color: white;             
+    border: none;
+    padding: 10px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #333;   
+}
+
+
 
 
 

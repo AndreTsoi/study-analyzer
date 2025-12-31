@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ course[1] }} - Study Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>{{ course[1] }}</h1>
+
+    <form action="/add_session/{{ course[0] }}" method="post">
+        <input name="type" placeholder="Study type" required>
+        <input name="duration" type="number" placeholder="Duration (min)" required>
+        <button type="submit">Add Session</button>
+    </form>
+
+    <h2>Sessions</h2>
+    <ul>
+        {% for s in sessions %}
+            <li>{{ s[2] }} - {{ s[3] }} min</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
