@@ -15,15 +15,25 @@
 
     <div class="course-grid">
         {% for c in courses %}
-        <div class="course-card">
+        <div class="course-card" data-course-id="{{ c[0] }}">
             <img src="{{ url_for('static', filename=c[2]) }}" alt="icon" class="course-icon">
             <p>{{ c[1] }}</p>
         </div>
         {% endfor %}
     </div>
 
+    <script>
+    document.querySelectorAll('.course-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const courseId = card.dataset.courseId;
+            window.location.href = `/course/${courseId}`;
+        });
+    });
+    </script>
 
-</div>
+
+
+
 
 </body>
 </html>
