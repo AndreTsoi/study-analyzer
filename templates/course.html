@@ -1,23 +1,320 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>{{ course[1] }} - Study Tracker</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
+    <a href="/" class="back-btn">← Back to Courses</a>
     <h1>{{ course[1] }}</h1>
 
-    <form action="/add_session/{{ course[0] }}" method="post">
-        <input name="type" placeholder="Study type" required>
+    <div class="stats">
+        <p><strong>Total sessions:</strong> <span id="session-count">{{ session_count }}</span></p>
+        <p><strong>Total time:</strong> <span id="total-time">{{ total_minutes }}</span></p>
+    </div>
+
+    <form id="add-session-form" action="/add_session/{{ course[0] }}" method="post">
+        <div class="study-type-container">
+            <select id="study-type-select" name="type">
+                <option value="">Select study type...</option>
+                {% for st in study_types %}
+                <option value="{{ st }}">{{ st }}</option>
+                {% endfor %}
+                <option value="__custom__">+ Add new type</option>
+            </select>
+            <input id="custom-type-input" type="text" placeholder="Enter new study type..." style="display: none;" autocomplete="off">
+        </div>
         <input name="duration" type="number" placeholder="Duration (min)" required>
         <button type="submit">Add Session</button>
     </form>
 
-    <h2>Sessions</h2>
-    <ul>
+    <div class="sessions-header">
+        <h2>Sessions</h2>
+        
+        <div class="session-controls">
+            <input type="text" id="filter-input" placeholder="Filter by type..." class="filter-input">
+            
+            <select id="sort-select" class="sort-select">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="duration-high">Duration (High to Low)</option>
+                <option value="duration-low">Duration (Low to High)</option>
+                <option value="type">Type (A-Z)</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="session-grid">
         {% for s in sessions %}
-            <li>{{ s[2] }} - {{ s[3] }} min</li>
+        <div class="session-card" data-session-id="{{ s[0] }}" data-duration="{{ s[3] }}" data-type="{{ s[2] }}" data-timestamp="{{ loop.revindex }}">
+            <div class="session-content">
+                <div class="session-type">{{ s[2] }}</div>
+                <div class="session-duration">{{ s[3] }} min</div>
+            </div>
+            <div class="session-card-actions">
+                <button class="edit-session-btn" title="Edit">✏️</button>
+                <button class="delete-session-btn" title="Delete">🗑️</button>
+            </div>
+        </div>
         {% endfor %}
-    </ul>
+    </div>
+
+    <script>
+        function formatTime(minutes) {
+            minutes = Math.floor(minutes);
+
+            if (minutes < 60) {
+                return `${minutes} min`;
+            }
+
+            if (minutes < 1440) {
+                const hrs = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+
+                return mins > 0
+                    ? `${hrs} hr ${mins} min`
+                    : `${hrs} hr`;
+            }
+
+            const days = Math.floor(minutes / 1440);
+            const hrs = Math.floor((minutes % 1440) / 60);
+
+            return hrs > 0
+                ? `${days} day ${hrs} hr`
+                : `${days} day`;
+        }
+
+        const form = document.getElementById('add-session-form');
+        const sessionGrid = document.getElementById('session-grid');
+        const sessionCountEl = document.getElementById('session-count');
+        const totalMinutesEl = document.getElementById('total-time');
+        const filterInput = document.getElementById('filter-input');
+        const sortSelect = document.getElementById('sort-select');
+        const studyTypeSelect = document.getElementById('study-type-select');
+        const customTypeInput = document.getElementById('custom-type-input');
+
+        let totalMinutes = Number("{{ total_minutes }}");
+        let sessionCounter = {{ sessions|length }};
+        let studyTypes = {{ study_types|tojson }};
+        totalMinutesEl.textContent = formatTime(totalMinutes);
+
+        // Handle study type selection
+        studyTypeSelect.addEventListener('change', () => {
+            if (studyTypeSelect.value === '__custom__') {
+                customTypeInput.style.display = 'block';
+                customTypeInput.required = true;
+                studyTypeSelect.required = false;
+                customTypeInput.focus();
+            } else {
+                customTypeInput.style.display = 'none';
+                customTypeInput.required = false;
+                studyTypeSelect.required = true;
+            }
+        });
+
+        // Filter sessions
+        filterInput.addEventListener('input', () => {
+            const filterValue = filterInput.value.toLowerCase();
+            const cards = sessionGrid.querySelectorAll('.session-card');
+            
+            cards.forEach(card => {
+                const type = card.dataset.type.toLowerCase();
+                if (type.includes(filterValue)) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+
+        // Sort sessions
+        sortSelect.addEventListener('change', () => {
+            const cards = Array.from(sessionGrid.querySelectorAll('.session-card'));
+            const sortValue = sortSelect.value;
+
+            cards.sort((a, b) => {
+                switch(sortValue) {
+                    case 'newest':
+                        return Number(b.dataset.timestamp) - Number(a.dataset.timestamp);
+                    case 'oldest':
+                        return Number(a.dataset.timestamp) - Number(b.dataset.timestamp);
+                    case 'duration-high':
+                        return Number(b.dataset.duration) - Number(a.dataset.duration);
+                    case 'duration-low':
+                        return Number(a.dataset.duration) - Number(b.dataset.duration);
+                    case 'type':
+                        return a.dataset.type.localeCompare(b.dataset.type);
+                    default:
+                        return 0;
+                }
+            });
+
+            cards.forEach(card => sessionGrid.appendChild(card));
+        });
+
+        // Add session
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(form);
+            const courseId = "{{ course[0] }}";
+
+            // Get the study type value
+            let studyType;
+            if (studyTypeSelect.value === '__custom__') {
+                studyType = customTypeInput.value.trim();
+                if (!studyType) {
+                    alert('Please enter a study type');
+                    return;
+                }
+                formData.set('type', studyType);
+            } else {
+                studyType = studyTypeSelect.value;
+                if (!studyType) {
+                    alert('Please select a study type');
+                    return;
+                }
+            }
+
+            const response = await fetch(`/add_session/${courseId}`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const newSession = await response.json();
+                sessionCounter++;
+
+                const card = document.createElement('div');
+                card.className = 'session-card fade-in';
+                card.dataset.sessionId = newSession.id;
+                card.dataset.duration = newSession.duration;
+                card.dataset.type = newSession.type;
+                card.dataset.timestamp = sessionCounter;
+                
+                card.innerHTML = `
+                    <div class="session-content">
+                        <div class="session-type">${newSession.type}</div>
+                        <div class="session-duration">${newSession.duration} min</div>
+                    </div>
+                    <div class="session-card-actions">
+                        <button class="edit-session-btn" title="Edit">✏️</button>
+                        <button class="delete-session-btn" title="Delete">🗑️</button>
+                    </div>
+                `;
+                
+                sessionGrid.prepend(card);
+
+                sessionCountEl.textContent = Number(sessionCountEl.textContent) + 1;
+                totalMinutes += newSession.duration;
+                totalMinutesEl.textContent = formatTime(totalMinutes);
+
+                // Add new type to dropdown if it's custom and not already there
+                if (!studyTypes.includes(newSession.type)) {
+                    studyTypes.push(newSession.type);
+                    studyTypes.sort();
+                    
+                    // Rebuild dropdown
+                    const customOption = studyTypeSelect.querySelector('option[value="__custom__"]');
+                    studyTypeSelect.innerHTML = '<option value="">Select study type...</option>';
+                    studyTypes.forEach(type => {
+                        const option = document.createElement('option');
+                        option.value = type;
+                        option.textContent = type;
+                        studyTypeSelect.appendChild(option);
+                    });
+                    studyTypeSelect.appendChild(customOption);
+                }
+
+                form.reset();
+                customTypeInput.style.display = 'none';
+                customTypeInput.required = false;
+                studyTypeSelect.required = true;
+            }
+        });
+
+        // Edit and Delete session handlers
+        sessionGrid.addEventListener('click', async (e) => {
+            const card = e.target.closest('.session-card');
+            if (!card) return;
+
+            const sessionId = card.dataset.sessionId;
+            const oldDuration = Number(card.dataset.duration);
+
+            // Delete session
+            if (e.target.classList.contains('delete-session-btn')) {
+                if (!confirm('Delete this session?')) return;
+
+                const response = await fetch(`/delete_session/${sessionId}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    card.remove();
+                    sessionCountEl.textContent = Number(sessionCountEl.textContent) - 1;
+                    totalMinutes -= oldDuration;
+                    totalMinutesEl.textContent = formatTime(totalMinutes);
+                }
+                return;
+            }
+
+            // Edit session
+            if (e.target.classList.contains('edit-session-btn')) {
+                const currentType = card.dataset.type;
+                
+                // Create a custom prompt with dropdown
+                const newType = prompt('Edit study type (or enter new):', currentType);
+                if (newType === null) return;
+
+                const newDuration = prompt('Edit duration (min):', oldDuration);
+                if (newDuration === null) return;
+
+                const duration = parseInt(newDuration);
+                if (isNaN(duration) || duration <= 0) {
+                    alert('Please enter a valid duration');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('type', newType);
+                formData.append('duration', duration);
+
+                const response = await fetch(`/edit_session/${sessionId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    card.querySelector('.session-type').textContent = newType;
+                    card.querySelector('.session-duration').textContent = `${duration} min`;
+                    card.dataset.duration = duration;
+                    card.dataset.type = newType;
+                    
+                    totalMinutes = totalMinutes - oldDuration + duration;
+                    totalMinutesEl.textContent = formatTime(totalMinutes);
+
+                    // Add new type to dropdown if not already there
+                    if (!studyTypes.includes(newType)) {
+                        studyTypes.push(newType);
+                        studyTypes.sort();
+                        
+                        const customOption = studyTypeSelect.querySelector('option[value="__custom__"]');
+                        studyTypeSelect.innerHTML = '<option value="">Select study type...</option>';
+                        studyTypes.forEach(type => {
+                            const option = document.createElement('option');
+                            option.value = type;
+                            option.textContent = type;
+                            studyTypeSelect.appendChild(option);
+                        });
+                        studyTypeSelect.appendChild(customOption);
+                    }
+                }
+                return;
+            }
+        });
+    </script>
 </body>
+
 </html>

@@ -30,9 +30,10 @@ input {
     box-sizing: border-box;
 }
 
+/* Default button styles */
 button {
-    background-color: #4f46e5;
-    color: white;
+    background-color: black;  
+    color: white;             
     border: none;
     padding: 10px 16px;
     border-radius: 6px;
@@ -40,7 +41,7 @@ button {
 }
 
 button:hover {
-    background-color: #4338ca;
+    background-color: #333;   
 }
 
 table {
@@ -60,6 +61,7 @@ th {
     background-color: #f0f2f5;
 }
 
+/* Course Grid */
 .course-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -73,10 +75,8 @@ th {
     cursor: pointer;
     overflow: hidden;
     transition: transform 0.2s, box-shadow 0.2s;
-    
-    /* fixed card size */
-    width: 100%;       /* grid column will define width */
-    height: 180px;     /* fixed height for the card */
+    width: 100%;
+    height: 220px;
     display: flex;
     flex-direction: column;
 }
@@ -86,15 +86,14 @@ th {
     box-shadow: 0 10px 20px rgba(0,0,0,0.1);
 }
 
-
 .course-icon {
     width: 100%;
-    height: 150px;           
-    object-fit: cover;
-    object-position: top -10px;
+    height: 150px;
+    object-fit: cover;  
+    object-position: center;
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
-    flex-shrink: 0;          
+    flex-shrink: 0;
 }
 
 .course-card p {
@@ -102,34 +101,208 @@ th {
     padding: 0px 0px 6px 0px;
     font-size: 18px;
     font-weight: 500;
-    flex-grow: 1;            /* fills remaining space if needed */
+    flex-grow: 1;
     display: flex;
-    align-items: center;     /* vertically center text in remaining space */
+    align-items: center;
     justify-content: center;
 }
 
-button {
-    background-color: black;  
-    color: white;             
+.course-actions {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 0 12px 0;
+    margin-top: auto;
+}
+
+.course-actions button {
+    background: none;
     border: none;
-    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 18px;
+    opacity: 0.6;
+    padding: 6px 10px;
+    transition: opacity 0.2s, background-color 0.2s;
+    filter: grayscale(100%) brightness(0.4);
+}
+
+.course-actions button:hover {
+    opacity: 1;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+/* Fade in animation */
+.fade-in {
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fadeInUp 0.5s forwards;
+}
+
+@keyframes fadeInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Stats */
+.stats {
+    margin: 20px 0;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 10px;
+    display: flex;
+    gap: 30px;
+    font-size: 16px;
+}
+
+.back-btn {
+    display: inline-block;
+    margin-bottom: 16px;
+    color: #111;
+    text-decoration: none;
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+
+.back-btn:hover {
+    opacity: 0.6;
+}
+
+/* Sessions Header */
+.sessions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 40px 0 20px 0;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.sessions-header h2 {
+    margin: 0;
+    color: #1a1a1a;
+}
+
+.session-controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.filter-input, .sort-select {
+    padding: 8px 12px;
+    border: 1px solid #d4d4d4;
     border-radius: 6px;
+    font-size: 14px;
+    background: white;
+    color: #1a1a1a;
+}
+
+.filter-input {
+    width: 200px;
+}
+
+.filter-input:focus, .sort-select:focus {
+    outline: none;
+    border-color: #525252;
+}
+
+.sort-select {
     cursor: pointer;
 }
 
-button:hover {
-    background-color: #333;   
+/* Session Grid */
+#session-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
 }
 
+.session-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 120px;
+    border: 1px solid #e5e5e5;
+}
 
+.session-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-color: #d4d4d4;
+}
 
+.session-content {
+    flex-grow: 1;
+}
 
+.session-type {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+    word-wrap: break-word;
+}
 
+.session-duration {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2a2a2a;
+    margin-top: 8px;
+}
 
+.session-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e5e5;
+}
 
+.session-card-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    opacity: 0.6;
+    padding: 4px 8px;
+    transition: opacity 0.2s, background-color 0.2s;
+    filter: grayscale(100%) brightness(0.4);
+}
+
+.session-card-actions button:hover {
+    opacity: 1;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+}
+
+/* Responsive adjustments */
 @media (max-width: 800px) {
     .course-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    #session-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+
+    .session-controls {
+        width: 100%;
+    }
+
+    .filter-input {
+        flex: 1;
+        width: auto;
     }
 }
 
@@ -137,5 +310,192 @@ button:hover {
     .course-grid {
         grid-template-columns: 1fr;
     }
+    
+    #session-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
+/* Modal styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 5% auto;
+    padding: 30px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.modal-content h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 20px;
+}
+
+.close:hover,
+.close:focus {
+    color: #000;
+}
+
+#image-upload {
+    margin: 20px 0;
+    padding: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#crop-container {
+    margin-top: 20px;
+}
+
+#image-preview {
+    text-align: center;
+    margin-bottom: 20px;
+    max-height: 400px;
+    overflow: hidden;
+}
+
+#image-preview img {
+    max-width: 100%;
+    border-radius: 8px;
+}
+
+.crop-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.crop-controls button {
+    padding: 12px 24px;
+    font-size: 16px;
+}
+
+/* Modal styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 3% auto;
+    padding: 30px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.modal-content h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 20px;
+}
+
+.close:hover,
+.close:focus {
+    color: #000;
+}
+
+#image-upload {
+    margin: 20px 0;
+    padding: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#crop-container {
+    margin-top: 20px;
+}
+
+#image-preview {
+    max-height: 500px;
+    overflow: hidden;
+    margin-bottom: 15px;
+}
+
+#image-preview img {
+    max-width: 100%;
+    display: block;
+}
+
+.crop-instructions {
+    text-align: center;
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 15px;
+    font-style: italic;
+}
+
+.crop-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.crop-controls button {
+    padding: 12px 24px;
+    font-size: 16px;
+}
+
+/* Study Type Container */
+.study-type-container {
+    margin-bottom: 16px;
+}
+
+#study-type-select, #custom-type-input {
+    width: 100%;
+    padding: 8px;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+#custom-type-input {
+    margin-top: 8px;
+}
+
+
+#study-type-select option[value="__custom__"] {
+    background-color: #f0f0f0;
+    font-weight: 600;
+    color: #2a2a2a;
+    border-top: 1px solid #d4d4d4;
+}
