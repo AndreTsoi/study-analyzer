@@ -1,39 +1,280 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Study Tracker</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Add Cropper.js library -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
 </head>
+
 <body>
     <div class="container">
-    <h1>Your Courses</h1>
+        <h1>Your Courses</h1>
 
-    <form action="/add_course" method="post">
-        <input name="name" placeholder="Course name" required>
-        <button type="submit">Add Course</button>
-    </form>
+        <form id="add-course-form" action="/add_course" method="post">
+            <input name="name" placeholder="Course name" required>
+            <button type="submit">Add Course</button>
+        </form>
 
-    <div class="course-grid">
-        {% for c in courses %}
-        <div class="course-card" data-course-id="{{ c[0] }}">
-            <img src="{{ url_for('static', filename=c[2]) }}" alt="icon" class="course-icon">
-            <p>{{ c[1] }}</p>
+        <input type="text" id="course-search" placeholder="Search courses..." class="course-search-input">
+
+        <div class="course-grid" id="course-grid">
+            {% for c in courses %}
+            <div class="course-card" data-course-id="{{ c[0] }}">
+                <img src="{{ url_for('static', filename=c[2]) }}" class="course-icon">
+                <p class="course-name">{{ c[1] }}</p>
+
+                <div class="course-actions">
+                    <button class="edit-btn" title="Edit name">✏️</button>
+                    <button class="image-btn" title="Change image">🖼️</button>
+                    <button class="delete-btn" title="Delete course">🗑️</button>
+                </div>
+            </div>
+
+            {% endfor %}
         </div>
-        {% endfor %}
+    </div>
+
+    <!-- Image Upload Modal -->
+    <div id="image-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Upload & Crop Course Image</h2>
+
+            <input type="file" id="image-upload" accept="image/*">
+
+            <div id="crop-container" style="display: none;">
+                <div id="image-preview">
+                    <img id="crop-image" style="max-width: 100%;">
+                </div>
+                <div class="crop-instructions">
+                    Drag and resize the box to crop your image
+                </div>
+                <div class="crop-controls">
+                    <button id="crop-btn">Save Cropped Image</button>
+                    <button id="cancel-crop-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-    document.querySelectorAll('.course-card').forEach(card => {
-        card.addEventListener('click', () => {
+        const courseGrid = document.getElementById('course-grid');
+        const courseForm = document.getElementById('add-course-form');
+        const modal = document.getElementById('image-modal');
+        const closeModal = document.querySelector('.close');
+        const imageUpload = document.getElementById('image-upload');
+        const cropContainer = document.getElementById('crop-container');
+        const imagePreview = document.getElementById('image-preview');
+        const cropImage = document.getElementById('crop-image');
+        const cropBtn = document.getElementById('crop-btn');
+        const cancelCropBtn = document.getElementById('cancel-crop-btn');
+
+        let currentCourseId = null;
+        let cropper = null;
+
+        // Modal controls
+        closeModal.onclick = () => {
+            modal.style.display = 'none';
+            resetModal();
+        };
+
+        window.onclick = (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+                resetModal();
+            }
+        };
+
+        cancelCropBtn.onclick = () => {
+            modal.style.display = 'none';
+            resetModal();
+        };
+
+        function resetModal() {
+            imageUpload.value = '';
+            cropContainer.style.display = 'none';
+            if (cropper) {
+                cropper.destroy();
+                cropper = null;
+            }
+            currentCourseId = null;
+        }
+
+        // Image upload handling
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                cropContainer.style.display = 'block';
+                cropImage.src = event.target.result;
+
+                // Destroy existing cropper if any
+                if (cropper) {
+                    cropper.destroy();
+                }
+
+                // Initialize Cropper.js with 400:150 aspect ratio to match card
+                cropper = new Cropper(cropImage, {
+                    aspectRatio: 400 / 150, // Width:Height ratio matching the course card display
+                    viewMode: 2,
+                    dragMode: 'move',
+                    autoCropArea: 0.8,
+                    restore: false,
+                    guides: true,
+                    center: true,
+                    highlight: false,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    toggleDragModeOnDblclick: false,
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Crop and save
+        cropBtn.addEventListener('click', async () => {
+            if (!cropper || !currentCourseId) return;
+
+            // Get cropped canvas with the same aspect ratio
+            const canvas = cropper.getCroppedCanvas({
+                width: 400,
+                height: 150, // Match the aspect ratio
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high',
+            });
+
+            // Convert to blob
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('image', blob, 'course-image.jpg');
+
+                const response = await fetch(`/upload_image/${currentCourseId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // Update image in the card
+                    const card = document.querySelector(`[data-course-id="${currentCourseId}"]`);
+                    if (card) {
+                        const img = card.querySelector('.course-icon');
+                        img.src = `/static/${data.icon}?t=${Date.now()}`;
+                    }
+
+                    modal.style.display = 'none';
+                    resetModal();
+                }
+            }, 'image/jpeg', 0.9);
+        });
+
+        // Course card click handlers
+        courseGrid.addEventListener('click', async (e) => {
+            const card = e.target.closest('.course-card');
+            if (!card) return;
+
             const courseId = card.dataset.courseId;
+
+            // Delete
+            if (e.target.classList.contains('delete-btn')) {
+                e.stopPropagation();
+                if (!confirm('Delete this course and all sessions?')) return;
+
+                await fetch(`/delete_course/${courseId}`, { method: 'POST' });
+                card.remove();
+                return;
+            }
+
+            // Edit name
+            if (e.target.classList.contains('edit-btn')) {
+                e.stopPropagation();
+                const nameEl = card.querySelector('.course-name');
+                const newName = prompt('Edit course name:', nameEl.textContent);
+                if (!newName) return;
+
+                const formData = new FormData();
+                formData.append('name', newName);
+
+                await fetch(`/edit_course/${courseId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                nameEl.textContent = newName;
+                return;
+            }
+
+            // Change image
+            if (e.target.classList.contains('image-btn')) {
+                e.stopPropagation();
+                currentCourseId = courseId;
+                modal.style.display = 'block';
+                return;
+            }
+
+            // Navigate to course
             window.location.href = `/course/${courseId}`;
         });
-    });
+
+        // Add course
+        courseForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(courseForm);
+
+            const response = await fetch('/add_course', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                alert('Failed to add course');
+                return;
+            }
+
+            const newCourse = await response.json();
+
+            const card = document.createElement('div');
+            card.className = 'course-card fade-in';
+            card.dataset.courseId = newCourse.id;
+
+            card.innerHTML = `
+        <img src="/static/${newCourse.icon}" class="course-icon">
+        <p class="course-name">${newCourse.name}</p>
+        <div class="course-actions">
+            <button class="edit-btn" title="Edit name">✏️</button>
+            <button class="image-btn" title="Change image">🖼️</button>
+            <button class="delete-btn" title="Delete course">🗑️</button>
+        </div>
+    `;
+
+            courseGrid.prepend(card);
+            courseForm.reset();
+        });
+
+        const courseSearch = document.getElementById('course-search');
+
+        courseSearch.addEventListener('input', () => {
+            const searchTerm = courseSearch.value.toLowerCase();
+            const cards = courseGrid.querySelectorAll('.course-card');
+
+            cards.forEach(card => {
+                const courseName = card.querySelector('.course-name').textContent.toLowerCase();
+
+                if (courseName.includes(searchTerm)) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
     </script>
-
-
-
-
-
 </body>
+
 </html>
