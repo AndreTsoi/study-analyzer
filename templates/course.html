@@ -15,6 +15,25 @@
         <p><strong>Total time:</strong> <span id="total-time">{{ total_minutes }}</span></p>
     </div>
 
+    <!-- Time Period Stats -->
+    <div class="time-stats">
+        <div class="time-stat-card">
+            <div class="time-stat-label">Today</div>
+            <div class="time-stat-value" id="today-time">0 min</div>
+            <div class="time-stat-sessions" id="today-sessions">0 sessions</div>
+        </div>
+        <div class="time-stat-card">
+            <div class="time-stat-label">This Week</div>
+            <div class="time-stat-value" id="week-time">0 min</div>
+            <div class="time-stat-sessions" id="week-sessions">0 sessions</div>
+        </div>
+        <div class="time-stat-card">
+            <div class="time-stat-label">This Month</div>
+            <div class="time-stat-value" id="month-time">0 min</div>
+            <div class="time-stat-sessions" id="month-sessions">0 sessions</div>
+        </div>
+    </div>
+
     <form id="add-session-form" action="/add_session/{{ course[0] }}" method="post">
         <div class="study-type-container">
             <select id="study-type-select" name="type">
@@ -34,6 +53,13 @@
         <h2>Sessions</h2>
         
         <div class="session-controls">
+            <select id="date-filter" class="date-filter">
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">Last 7 Days</option>
+                <option value="month">Last 30 Days</option>
+            </select>
+
             <input type="text" id="filter-input" placeholder="Filter by type..." class="filter-input">
             
             <select id="sort-select" class="sort-select">
@@ -48,10 +74,11 @@
 
     <div id="session-grid">
         {% for s in sessions %}
-        <div class="session-card" data-session-id="{{ s[0] }}" data-duration="{{ s[3] }}" data-type="{{ s[2] }}" data-timestamp="{{ loop.revindex }}">
+        <div class="session-card" data-session-id="{{ s[0] }}" data-duration="{{ s[3] }}" data-type="{{ s[2] }}" data-created-at="{{ s[4] }}" data-timestamp="{{ loop.index }}">
             <div class="session-content">
                 <div class="session-type">{{ s[2] }}</div>
                 <div class="session-duration">{{ s[3] }} min</div>
+                <div class="session-date">{{ s[4][:10] if s[4] else 'Unknown' }}</div>
             </div>
             <div class="session-card-actions">
                 <button class="edit-session-btn" title="Edit">✏️</button>
@@ -86,19 +113,95 @@
                 : `${days} day`;
         }
 
+        function formatDate(dateString) {
+            if (!dateString) return 'Unknown';
+            const date = new Date(dateString);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            // Check if it's today
+            if (date.toDateString() === today.toDateString()) {
+                return 'Today';
+            }
+            // Check if it's yesterday
+            if (date.toDateString() === yesterday.toDateString()) {
+                return 'Yesterday';
+            }
+            // Otherwise return formatted date
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        function calculateTimeStats() {
+            const cards = sessionGrid.querySelectorAll('.session-card');
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekAgo = new Date(today);
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            const monthAgo = new Date(today);
+            monthAgo.setDate(monthAgo.getDate() - 30);
+
+            let todayTime = 0, todayCount = 0;
+            let weekTime = 0, weekCount = 0;
+            let monthTime = 0, monthCount = 0;
+
+            cards.forEach(card => {
+                const dateStr = card.dataset.createdAt;
+                if (!dateStr) return;
+
+                const cardDate = new Date(dateStr);
+                const duration = Number(card.dataset.duration);
+
+                if (cardDate >= today) {
+                    todayTime += duration;
+                    todayCount++;
+                }
+                if (cardDate >= weekAgo) {
+                    weekTime += duration;
+                    weekCount++;
+                }
+                if (cardDate >= monthAgo) {
+                    monthTime += duration;
+                    monthCount++;
+                }
+            });
+
+            document.getElementById('today-time').textContent = formatTime(todayTime);
+            document.getElementById('today-sessions').textContent = `${todayCount} session${todayCount !== 1 ? 's' : ''}`;
+            
+            document.getElementById('week-time').textContent = formatTime(weekTime);
+            document.getElementById('week-sessions').textContent = `${weekCount} session${weekCount !== 1 ? 's' : ''}`;
+            
+            document.getElementById('month-time').textContent = formatTime(monthTime);
+            document.getElementById('month-sessions').textContent = `${monthCount} session${monthCount !== 1 ? 's' : ''}`;
+        }
+
         const form = document.getElementById('add-session-form');
         const sessionGrid = document.getElementById('session-grid');
         const sessionCountEl = document.getElementById('session-count');
         const totalMinutesEl = document.getElementById('total-time');
         const filterInput = document.getElementById('filter-input');
         const sortSelect = document.getElementById('sort-select');
+        const dateFilter = document.getElementById('date-filter');
         const studyTypeSelect = document.getElementById('study-type-select');
         const customTypeInput = document.getElementById('custom-type-input');
 
         let totalMinutes = Number("{{ total_minutes }}");
         let sessionCounter = {{ sessions|length }};
-        let studyTypes = {{ study_types|tojson }};
+        let studyTypes = [];
+        {% for st in study_types %}
+        studyTypes.push("{{ st }}");
+        {% endfor %}
+        
         totalMinutesEl.textContent = formatTime(totalMinutes);
+        calculateTimeStats();
+
+        // Update all session dates to show "Today", "Yesterday", etc.
+        document.querySelectorAll('.session-date').forEach(el => {
+            const card = el.closest('.session-card');
+            const dateStr = card.dataset.createdAt;
+            el.textContent = formatDate(dateStr);
+        });
 
         // Handle study type selection
         studyTypeSelect.addEventListener('change', () => {
@@ -114,20 +217,53 @@
             }
         });
 
-        // Filter sessions
+        // Date filter
+        dateFilter.addEventListener('change', () => {
+            applyFilters();
+        });
+
+        // Filter sessions by type
         filterInput.addEventListener('input', () => {
-            const filterValue = filterInput.value.toLowerCase();
+            applyFilters();
+        });
+
+        function applyFilters() {
+            const dateValue = dateFilter.value;
+            const typeValue = filterInput.value.toLowerCase();
             const cards = sessionGrid.querySelectorAll('.session-card');
             
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekAgo = new Date(today);
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            const monthAgo = new Date(today);
+            monthAgo.setDate(monthAgo.getDate() - 30);
+
             cards.forEach(card => {
                 const type = card.dataset.type.toLowerCase();
-                if (type.includes(filterValue)) {
-                    card.style.display = 'flex';
-                } else {
-                    card.style.display = 'none';
+                const dateStr = card.dataset.createdAt;
+                const cardDate = dateStr ? new Date(dateStr) : null;
+
+                let showByType = type.includes(typeValue);
+                let showByDate = true;
+
+                if (dateValue !== 'all' && cardDate) {
+                    switch(dateValue) {
+                        case 'today':
+                            showByDate = cardDate >= today;
+                            break;
+                        case 'week':
+                            showByDate = cardDate >= weekAgo;
+                            break;
+                        case 'month':
+                            showByDate = cardDate >= monthAgo;
+                            break;
+                    }
                 }
+
+                card.style.display = (showByType && showByDate) ? 'flex' : 'none';
             });
-        });
+        }
 
         // Sort sessions
         sortSelect.addEventListener('change', () => {
@@ -137,9 +273,9 @@
             cards.sort((a, b) => {
                 switch(sortValue) {
                     case 'newest':
-                        return Number(b.dataset.timestamp) - Number(a.dataset.timestamp);
+                        return new Date(b.dataset.createdAt) - new Date(a.dataset.createdAt);
                     case 'oldest':
-                        return Number(a.dataset.timestamp) - Number(b.dataset.timestamp);
+                        return new Date(a.dataset.createdAt) - new Date(b.dataset.createdAt);
                     case 'duration-high':
                         return Number(b.dataset.duration) - Number(a.dataset.duration);
                     case 'duration-low':
@@ -192,12 +328,14 @@
                 card.dataset.sessionId = newSession.id;
                 card.dataset.duration = newSession.duration;
                 card.dataset.type = newSession.type;
+                card.dataset.createdAt = newSession.created_at;
                 card.dataset.timestamp = sessionCounter;
                 
                 card.innerHTML = `
                     <div class="session-content">
                         <div class="session-type">${newSession.type}</div>
                         <div class="session-duration">${newSession.duration} min</div>
+                        <div class="session-date">${formatDate(newSession.created_at)}</div>
                     </div>
                     <div class="session-card-actions">
                         <button class="edit-session-btn" title="Edit">✏️</button>
@@ -210,6 +348,7 @@
                 sessionCountEl.textContent = Number(sessionCountEl.textContent) + 1;
                 totalMinutes += newSession.duration;
                 totalMinutesEl.textContent = formatTime(totalMinutes);
+                calculateTimeStats();
 
                 // Add new type to dropdown if it's custom and not already there
                 if (!studyTypes.includes(newSession.type)) {
@@ -256,6 +395,7 @@
                     sessionCountEl.textContent = Number(sessionCountEl.textContent) - 1;
                     totalMinutes -= oldDuration;
                     totalMinutesEl.textContent = formatTime(totalMinutes);
+                    calculateTimeStats();
                 }
                 return;
             }
@@ -264,7 +404,6 @@
             if (e.target.classList.contains('edit-session-btn')) {
                 const currentType = card.dataset.type;
                 
-                // Create a custom prompt with dropdown
                 const newType = prompt('Edit study type (or enter new):', currentType);
                 if (newType === null) return;
 
@@ -294,6 +433,7 @@
                     
                     totalMinutes = totalMinutes - oldDuration + duration;
                     totalMinutesEl.textContent = formatTime(totalMinutes);
+                    calculateTimeStats();
 
                     // Add new type to dropdown if not already there
                     if (!studyTypes.includes(newType)) {
