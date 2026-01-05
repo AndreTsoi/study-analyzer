@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, jsonify
 import sqlite3
 import time
 import os
+from datetime import datetime
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -26,11 +27,19 @@ def init_db():
                  (id INTEGER PRIMARY KEY,
                   course_id INTEGER,
                   type TEXT,
-                  duration INTEGER)''')
+                  duration INTEGER,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS study_types
                  (id INTEGER PRIMARY KEY,
                   name TEXT UNIQUE)''')
+
+    # Add created_at column if it doesn't exist (for existing databases)
+    try:
+        c.execute("ALTER TABLE sessions ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        conn.commit()
+    except:
+        pass  # Column already exists
 
     conn.commit()
     conn.close()
@@ -71,7 +80,7 @@ def course_page(course_id):
     c.execute("SELECT * FROM courses WHERE id = ?", (course_id,))
     course = c.fetchone()
 
-    c.execute("SELECT * FROM sessions WHERE course_id = ?", (course_id,))
+    c.execute("SELECT * FROM sessions WHERE course_id = ? ORDER BY created_at DESC", (course_id,))
     sessions = c.fetchall()
 
     c.execute("""
@@ -110,17 +119,23 @@ def add_session_for_course(course_id):
     # Add study type if it doesn't exist
     c.execute("INSERT OR IGNORE INTO study_types (name) VALUES (?)", (study_type,))
     
-    c.execute("INSERT INTO sessions (course_id, type, duration) VALUES (?, ?, ?)",
+    c.execute("INSERT INTO sessions (course_id, type, duration, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
               (course_id, study_type, duration))
     conn.commit()
     
     session_id = c.lastrowid
+    
+    # Get the created_at timestamp
+    c.execute("SELECT created_at FROM sessions WHERE id = ?", (session_id,))
+    created_at = c.fetchone()[0]
+    
     conn.close()
 
     return jsonify({
         "id": session_id,
         "type": study_type,
-        "duration": duration
+        "duration": duration,
+        "created_at": created_at
     })
 
 #edit course
