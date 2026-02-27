@@ -4,6 +4,7 @@
 <head>
     <title>{{ course[1] }} - Study Tracker</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 
 <body>
@@ -34,6 +35,11 @@
         </div>
     </div>
 
+    <!-- Insights Button -->
+    <div class="insights-button-container">
+        <button id="view-insights-btn" class="insights-btn">🔍 View Insights for {{ course[1] }}</button>
+    </div>
+
     <form id="add-session-form" action="/add_session/{{ course[0] }}" method="post">
         <div class="study-type-container">
             <select id="study-type-select" name="type">
@@ -43,15 +49,94 @@
                 {% endfor %}
                 <option value="__custom__">+ Add new type</option>
             </select>
-            <input id="custom-type-input" type="text" placeholder="Enter new study type..." style="display: none;" autocomplete="off">
+            <input id="custom-type-input" type="text" placeholder="Enter new study type..." style="display: none;"
+                autocomplete="off">
         </div>
-        <input name="duration" type="number" placeholder="Duration (min)" required>
+        <input name="duration" type="number" placeholder="Duration (min)" required min="1">
+
+        <!-- Rating Section -->
+        <div class="rating-container">
+            <label class="rating-label">How effective was this session?</label>
+            <div class="star-rating" id="add-star-rating">
+                <input type="radio" name="rating" value="5" id="star5" required>
+                <label for="star5" title="Excellent - Deep focus, highly productive">★</label>
+
+                <input type="radio" name="rating" value="4" id="star4">
+                <label for="star4" title="Good - Focused, got a lot done">★</label>
+
+                <input type="radio" name="rating" value="3" id="star3">
+                <label for="star3" title="Okay - Some distractions, moderate progress">★</label>
+
+                <input type="radio" name="rating" value="2" id="star2">
+                <label for="star2" title="Poor - Struggled to focus, limited progress">★</label>
+
+                <input type="radio" name="rating" value="1" id="star1">
+                <label for="star1" title="Very Poor - Couldn't focus, wasted time">★</label>
+            </div>
+            <div class="rating-hint" id="rating-hint">Select a rating</div>
+        </div>
+
         <button type="submit">Add Session</button>
     </form>
 
+    <!-- Exam Tracking Section -->
+    <div class="exam-section">
+        <h2>Exams & Grades</h2>
+        
+        <form id="add-exam-form" action="#" method="post">
+            <select name="exam_type" id="exam-type-select" required>
+                <option value="">Select exam type...</option>
+                <option value="Quiz">Quiz</option>
+                <option value="Test">Test</option>
+                <option value="Midterm">Midterm</option>
+                <option value="Final">Final</option>
+                <option value="Project">Project</option>
+                <option value="Assignment">Assignment</option>
+            </select>
+            
+            <input name="exam_name" type="text" placeholder="Exam name (e.g., 'Chapter 5 Quiz')" required>
+            
+            <div class="grade-inputs">
+                <input name="grade" type="number" step="0.01" placeholder="Grade received" required min="0">
+                <span class="grade-separator">/</span>
+                <input name="max_grade" type="number" step="0.01" placeholder="Max grade" required min="0">
+            </div>
+            
+            <input name="weight" id="exam-weight-input" type="number" step="0.1" placeholder="Weight % (e.g., 15 for 15%)" required min="0" max="100">
+            
+            <input name="exam_date" type="date" required>
+            
+            <button type="submit">Add Exam</button>
+        </form>
+
+        <!-- Exams Grid -->
+        <div id="exam-grid">
+            {% for e in exams %}
+            <div class="exam-card" data-exam-id="{{ e[0] }}" data-grade="{{ e[4] }}" data-max-grade="{{ e[5] }}" data-weight="{{ e[7] if e|length > 7 else 0 }}">
+                <div class="exam-content">
+                    <div class="exam-header">
+                        <div class="exam-type-badge">{{ e[2] }}</div>
+                        <div class="exam-weight-badge">{{ e[7] if e|length > 7 else 0 }}%</div>
+                    </div>
+                    <div class="exam-name">{{ e[3] }}</div>
+                    <div class="exam-grade">
+                        {{ e[4] }}/{{ e[5] }} 
+                        <span class="exam-percentage">({{ "%.1f"|format((e[4]/e[5]*100) if e[5] > 0 else 0) }}%)</span>
+                    </div>
+                    <div class="exam-date">{{ e[6] }}</div>
+                </div>
+                <div class="exam-card-actions">
+                    <button class="edit-exam-btn" title="Edit">✏️</button>
+                    <button class="delete-exam-btn" title="Delete">🗑️</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
     <div class="sessions-header">
         <h2>Sessions</h2>
-        
+
         <div class="session-controls">
             <select id="date-filter" class="date-filter">
                 <option value="all">All Time</option>
@@ -61,12 +146,14 @@
             </select>
 
             <input type="text" id="filter-input" placeholder="Filter by type..." class="filter-input">
-            
+
             <select id="sort-select" class="sort-select">
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
                 <option value="duration-high">Duration (High to Low)</option>
                 <option value="duration-low">Duration (Low to High)</option>
+                <option value="rating-high">Rating (High to Low)</option>
+                <option value="rating-low">Rating (Low to High)</option>
                 <option value="type">Type (A-Z)</option>
             </select>
         </div>
@@ -74,11 +161,18 @@
 
     <div id="session-grid">
         {% for s in sessions %}
-        <div class="session-card" data-session-id="{{ s[0] }}" data-duration="{{ s[3] }}" data-type="{{ s[2] }}" data-created-at="{{ s[4] }}" data-timestamp="{{ loop.index }}">
+        <div class="session-card" data-session-id="{{ s[0] }}" data-duration="{{ s[3] }}" data-type="{{ s[2] }}" data-created-at="{{ s[4] }}" data-rating="{{ s[5] if s[5] else 0 }}" data-timezone-offset="{{ s[6] if s|length > 6 else '+0:00' }}" data-timestamp="{{ loop.index }}">
             <div class="session-content">
                 <div class="session-type">{{ s[2] }}</div>
                 <div class="session-duration">{{ s[3] }} min</div>
-                <div class="session-date">{{ s[4][:10] if s[4] else 'Unknown' }}</div>
+                <div class="session-rating">
+                    {% if s[5] %}
+                        {% for i in range(s[5]) %}★{% endfor %}{% for i in range(5 - s[5]) %}☆{% endfor %}
+                    {% else %}
+                        <span class="no-rating">No rating</span>
+                    {% endif %}
+                </div>
+                <div class="session-date" data-raw-date="{{ s[4] if s[4] else '' }}" data-timezone="{{ s[6] if s|length > 6 else '+0:00' }}"></div>
             </div>
             <div class="session-card-actions">
                 <button class="edit-session-btn" title="Edit">✏️</button>
@@ -86,6 +180,198 @@
             </div>
         </div>
         {% endfor %}
+    </div>
+
+    <!-- Edit Session Modal -->
+    <div id="edit-session-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="close-edit-modal">&times;</span>
+            <h2>Edit Session</h2>
+
+            <form id="edit-session-form">
+                <div class="study-type-container">
+                    <label>Study Type</label>
+                    <select id="edit-study-type-select" name="type">
+                        <option value="">Select study type...</option>
+                        {% for st in study_types %}
+                        <option value="{{ st }}">{{ st }}</option>
+                        {% endfor %}
+                        <option value="__custom__">+ Add new type</option>
+                    </select>
+                    <input id="edit-custom-type-input" type="text" placeholder="Enter new study type..."
+                        style="display: none;" autocomplete="off">
+                </div>
+
+                <label>Duration (minutes)</label>
+                <input id="edit-duration" name="duration" type="number" placeholder="Duration (min)" required min="1">
+
+                <!-- Rating Section -->
+                <div class="rating-container">
+                    <label class="rating-label">How effective was this session?</label>
+                    <div class="star-rating" id="edit-star-rating">
+                        <input type="radio" name="rating" value="5" id="edit-star5" required>
+                        <label for="edit-star5" title="Excellent - Deep focus, highly productive">★</label>
+
+                        <input type="radio" name="rating" value="4" id="edit-star4">
+                        <label for="edit-star4" title="Good - Focused, got a lot done">★</label>
+
+                        <input type="radio" name="rating" value="3" id="edit-star3">
+                        <label for="edit-star3" title="Okay - Some distractions, moderate progress">★</label>
+
+                        <input type="radio" name="rating" value="2" id="edit-star2">
+                        <label for="edit-star2" title="Poor - Struggled to focus, limited progress">★</label>
+
+                        <input type="radio" name="rating" value="1" id="edit-star1">
+                        <label for="edit-star1" title="Very Poor - Couldn't focus, wasted time">★</label>
+                    </div>
+                    <div class="rating-hint" id="edit-rating-hint">Select a rating</div>
+                </div>
+
+                <div class="modal-buttons">
+                    <button type="submit" class="save-btn">Save Changes</button>
+                    <button type="button" class="cancel-btn" id="cancel-edit-btn">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Insights Modal -->
+    <div id="insights-modal" class="modal">
+        <div class="modal-content insights-modal-content">
+            <span class="close" id="close-insights-modal">&times;</span>
+            <h2 id="insights-title">🔍 Insights for {{ course[1] }}</h2>
+            
+            <div id="insights-loading" style="text-align: center; padding: 40px;">
+                <p>Analyzing your study patterns...</p>
+            </div>
+
+            <div id="insights-content" style="display: none;">
+                <!-- Performance Section -->
+                <div class="insights-section" id="performance-section">
+                    <h3>📊 Exam Performance</h3>
+                    <div class="insights-cards">
+                        <div class="insight-card">
+                            <div class="insight-label">Average Score</div>
+                            <div class="insight-value" id="avg-score">--</div>
+                        </div>
+                        <div class="insight-card">
+                            <div class="insight-label">Best Score</div>
+                            <div class="insight-value" id="best-score">--</div>
+                        </div>
+                        <div class="insight-card">
+                            <div class="insight-label">Trend</div>
+                            <div class="insight-value" id="trend">--</div>
+                        </div>
+                    </div>
+                    <div class="chart-container-small">
+                        <canvas id="exam-timeline-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Study Patterns Section -->
+                <div class="insights-section">
+                    <h3>⏰ Study Patterns</h3>
+                    <div class="insights-cards">
+                        <div class="insight-card">
+                            <div class="insight-label">Best Day</div>
+                            <div class="insight-value" id="best-day">--</div>
+                            <div class="insight-subtext" id="best-day-rating">--</div>
+                        </div>
+                        <div class="insight-card">
+                            <div class="insight-label">Best Time</div>
+                            <div class="insight-value" id="best-time">--</div>
+                            <div class="insight-subtext" id="best-time-rating">--</div>
+                        </div>
+                        <div class="insight-card">
+                            <div class="insight-label">Current Streak</div>
+                            <div class="insight-value" id="current-streak">--</div>
+                        </div>
+                    </div>
+                    <div class="chart-container-small">
+                        <canvas id="day-breakdown-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Effectiveness Section -->
+                <div class="insights-section">
+                    <h3>🎯 What Works Best</h3>
+                    <div class="insights-cards">
+                        <div class="insight-card">
+                            <div class="insight-label">Most Effective Type</div>
+                            <div class="insight-value" id="best-type">--</div>
+                            <div class="insight-subtext" id="best-type-rating">--</div>
+                        </div>
+                        <div class="insight-card">
+                            <div class="insight-label">Optimal Duration</div>
+                            <div class="insight-value" id="optimal-duration">--</div>
+                            <div class="insight-subtext" id="optimal-duration-rating">--</div>
+                        </div>
+                    </div>
+                    <div class="chart-container-small">
+                        <canvas id="study-type-chart"></canvas>
+                    </div>
+                    <div class="chart-container-small" id="correlation-chart-container" style="display: none;">
+                        <h4 style="margin-top: 20px;">Study Hours vs Exam Scores</h4>
+                        <canvas id="correlation-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recommendations Section -->
+                <div class="insights-section">
+                    <h3>💡 Recommendations</h3>
+                    <div id="recommendations-list"></div>
+                </div>
+
+                <!-- Predictions Section -->
+                <div class="insights-section" id="predictions-section" style="display: none;">
+                    <h3>📈 Predictions</h3>
+                    <div class="prediction-card">
+                        <p id="prediction-text"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Exam Modal -->
+    <div id="edit-exam-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="close-exam-modal">&times;</span>
+            <h2>Edit Exam</h2>
+
+            <form id="edit-exam-form">
+                <label>Exam Type</label>
+                <select id="edit-exam-type" name="exam_type" required>
+                    <option value="Quiz">Quiz</option>
+                    <option value="Test">Test</option>
+                    <option value="Midterm">Midterm</option>
+                    <option value="Final">Final</option>
+                    <option value="Project">Project</option>
+                    <option value="Assignment">Assignment</option>
+                </select>
+
+                <label>Exam Name</label>
+                <input id="edit-exam-name" name="exam_name" type="text" required>
+
+                <label>Grade</label>
+                <div class="grade-inputs">
+                    <input id="edit-grade" name="grade" type="number" step="0.01" placeholder="Grade received" required min="0">
+                    <span class="grade-separator">/</span>
+                    <input id="edit-max-grade" name="max_grade" type="number" step="0.01" placeholder="Max grade" required min="0">
+                </div>
+
+                <label>Weight (%)</label>
+                <input id="edit-weight" name="weight" type="number" step="0.1" placeholder="Weight % (e.g., 15 for 15%)" required min="0" max="100">
+
+                <label>Exam Date</label>
+                <input id="edit-exam-date" name="exam_date" type="date" required>
+
+                <div class="modal-buttons">
+                    <button type="submit" class="save-btn">Save Changes</button>
+                    <button type="button" class="cancel-btn" id="cancel-exam-btn">Cancel</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script>
@@ -113,33 +399,59 @@
                 : `${days} day`;
         }
 
-        function formatDate(dateString) {
+        function formatDate(dateString, timezoneOffset) {
             if (!dateString) return 'Unknown';
-            const date = new Date(dateString);
-            const today = new Date();
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-
-            // Check if it's today
-            if (date.toDateString() === today.toDateString()) {
-                return 'Today';
+            
+            //parse the UTC timestamp
+            const utcDate = new Date(dateString.includes('Z') ? dateString : dateString + 'Z');
+            
+            //apply the stored timezone offset to get the LOCAL time it was created
+            let localDate;
+            if (timezoneOffset && timezoneOffset !== '+0:00' && timezoneOffset !== null) {
+                //parse offset like "+8:00" or "-5:00"
+                const offsetMatch = timezoneOffset.match(/^([+-])(\d+):(\d+)$/);
+                if (offsetMatch) {
+                    const sign = offsetMatch[1] === '+' ? 1 : -1;
+                    const hours = parseInt(offsetMatch[2]);
+                    const minutes = parseInt(offsetMatch[3]);
+                    const totalOffsetMinutes = sign * (hours * 60 + minutes);
+                    
+                    //convert UTC to the local time it was created
+                    localDate = new Date(utcDate.getTime() + totalOffsetMinutes * 60 * 1000);
+                } else {
+                    localDate = utcDate;
+                }
+            } else {
+                localDate = utcDate;
             }
-            // Check if it's yesterday
-            if (date.toDateString() === yesterday.toDateString()) {
-                return 'Yesterday';
-            }
-            // Otherwise return formatted date
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            
+            //format as "Jan 7, 2025 at 8:00 AM" - always shows the time it was actually created
+            const options = { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: 'UTC' //format in UTC since we already adjusted the time
+            };
+            
+            return localDate.toLocaleString('en-US', options).replace(',', ' at');
         }
 
         function calculateTimeStats() {
             const cards = sessionGrid.querySelectorAll('.session-card');
             const now = new Date();
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const weekAgo = new Date(today);
-            weekAgo.setDate(weekAgo.getDate() - 7);
-            const monthAgo = new Date(today);
-            monthAgo.setDate(monthAgo.getDate() - 30);
+            
+            //get current user's timezone offset for "today" calculation
+            const currentOffset = -now.getTimezoneOffset();
+            const currentOffsetMs = currentOffset * 60 * 1000;
+            
+            //calculate "today" in user's current timezone
+            const nowInCurrentTz = new Date(now.getTime() + currentOffsetMs);
+            const todayStart = new Date(Date.UTC(nowInCurrentTz.getUTCFullYear(), nowInCurrentTz.getUTCMonth(), nowInCurrentTz.getUTCDate()));
+            const weekAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const monthAgo = new Date(todayStart.getTime() - 30 * 24 * 60 * 60 * 1000);
 
             let todayTime = 0, todayCount = 0;
             let weekTime = 0, weekCount = 0;
@@ -147,20 +459,40 @@
 
             cards.forEach(card => {
                 const dateStr = card.dataset.createdAt;
+                const offset = card.dataset.timezoneOffset;
                 if (!dateStr) return;
 
-                const cardDate = new Date(dateStr);
+                //parse as UTC
+                const utcDate = new Date(dateStr.includes('Z') ? dateStr : dateStr + 'Z');
+                
+                //apply the stored offset to get when it was created in that timezone
+                let createdLocalTime;
+                if (offset && offset !== '+0:00') {
+                    const offsetMatch = offset.match(/^([+-])(\d+):(\d+)$/);
+                    if (offsetMatch) {
+                        const sign = offsetMatch[1] === '+' ? 1 : -1;
+                        const hours = parseInt(offsetMatch[2]);
+                        const mins = parseInt(offsetMatch[3]);
+                        const totalOffsetMs = sign * (hours * 60 + mins) * 60 * 1000;
+                        createdLocalTime = new Date(utcDate.getTime() + totalOffsetMs);
+                    } else {
+                        createdLocalTime = utcDate;
+                    }
+                } else {
+                    createdLocalTime = utcDate;
+                }
+                
                 const duration = Number(card.dataset.duration);
 
-                if (cardDate >= today) {
+                if (createdLocalTime >= todayStart) {
                     todayTime += duration;
                     todayCount++;
                 }
-                if (cardDate >= weekAgo) {
+                if (createdLocalTime >= weekAgo) {
                     weekTime += duration;
                     weekCount++;
                 }
-                if (cardDate >= monthAgo) {
+                if (createdLocalTime >= monthAgo) {
                     monthTime += duration;
                     monthCount++;
                 }
@@ -168,10 +500,10 @@
 
             document.getElementById('today-time').textContent = formatTime(todayTime);
             document.getElementById('today-sessions').textContent = `${todayCount} session${todayCount !== 1 ? 's' : ''}`;
-            
+
             document.getElementById('week-time').textContent = formatTime(weekTime);
             document.getElementById('week-sessions').textContent = `${weekCount} session${weekCount !== 1 ? 's' : ''}`;
-            
+
             document.getElementById('month-time').textContent = formatTime(monthTime);
             document.getElementById('month-sessions').textContent = `${monthCount} session${monthCount !== 1 ? 's' : ''}`;
         }
@@ -185,25 +517,127 @@
         const dateFilter = document.getElementById('date-filter');
         const studyTypeSelect = document.getElementById('study-type-select');
         const customTypeInput = document.getElementById('custom-type-input');
+        const ratingHint = document.getElementById('rating-hint');
+
+        //edit modal elements
+        const editModal = document.getElementById('edit-session-modal');
+        const editForm = document.getElementById('edit-session-form');
+        const closeEditModal = document.getElementById('close-edit-modal');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const editStudyTypeSelect = document.getElementById('edit-study-type-select');
+        const editCustomTypeInput = document.getElementById('edit-custom-type-input');
+        const editDuration = document.getElementById('edit-duration');
+        const editRatingHint = document.getElementById('edit-rating-hint');
+        let currentEditSessionId = null;
+        let currentEditSessionCard = null;
 
         let totalMinutes = Number("{{ total_minutes }}");
-        let sessionCounter = {{ sessions|length }};
+        let sessionCounter = {{ sessions| length }};
         let studyTypes = [];
         {% for st in study_types %}
         studyTypes.push("{{ st }}");
         {% endfor %}
-        
+
         totalMinutesEl.textContent = formatTime(totalMinutes);
         calculateTimeStats();
 
-        // Update all session dates to show "Today", "Yesterday", etc.
+        //update all session dates to show the time they were created
         document.querySelectorAll('.session-date').forEach(el => {
-            const card = el.closest('.session-card');
-            const dateStr = card.dataset.createdAt;
-            el.textContent = formatDate(dateStr);
+            const rawDate = el.dataset.rawDate;
+            const timezone = el.dataset.timezone;
+            if (rawDate) {
+                el.textContent = formatDate(rawDate, timezone);
+            } else {
+                el.textContent = 'Unknown';
+            }
         });
 
-        // Handle study type selection
+        //rating hint text
+        const ratingHints = {
+            '5': 'Excellent - Deep focus, highly productive',
+            '4': 'Good - Focused, got a lot done',
+            '3': 'Okay - Some distractions, moderate progress',
+            '2': 'Poor - Struggled to focus, limited progress',
+            '1': 'Very Poor - Couldn\'t focus, wasted time'
+        };
+
+        //show rating hint on hover/selection (Add form)
+        const addFormRating = document.getElementById('add-star-rating');
+
+        addFormRating.querySelectorAll('input').forEach(input => {
+            input.addEventListener('change', () => {
+                ratingHint.textContent = ratingHints[input.value];
+                ratingHint.style.opacity = '1';
+            });
+        });
+
+        addFormRating.querySelectorAll('label').forEach(label => {
+            label.addEventListener('mouseenter', () => {
+                const forId = label.getAttribute('for');
+                const input = addFormRating.querySelector(`#${forId}`);
+                if (input && ratingHints[input.value]) {
+                    ratingHint.textContent = ratingHints[input.value];
+                    ratingHint.style.opacity = '1';
+                }
+            });
+        });
+
+        addFormRating.addEventListener('mouseleave', () => {
+            const selected = addFormRating.querySelector('input:checked');
+            if (selected) {
+                ratingHint.textContent = ratingHints[selected.value];
+            } else {
+                ratingHint.textContent = 'Select a rating';
+                ratingHint.style.opacity = '0.6';
+            }
+        });
+
+        //edit modal rating hints
+        const editFormRating = document.getElementById('edit-star-rating');
+
+        editFormRating.querySelectorAll('input').forEach(input => {
+            input.addEventListener('change', () => {
+                editRatingHint.textContent = ratingHints[input.value];
+                editRatingHint.style.opacity = '1';
+            });
+        });
+
+        editFormRating.querySelectorAll('label').forEach(label => {
+            label.addEventListener('mouseenter', () => {
+                const forId = label.getAttribute('for');
+                const input = editFormRating.querySelector(`#${forId}`);
+                if (input && ratingHints[input.value]) {
+                    editRatingHint.textContent = ratingHints[input.value];
+                    editRatingHint.style.opacity = '1';
+                }
+            });
+        });
+
+        editFormRating.addEventListener('mouseleave', () => {
+            const selected = editFormRating.querySelector('input:checked');
+            if (selected) {
+                editRatingHint.textContent = ratingHints[selected.value];
+            } else {
+                editRatingHint.textContent = 'Select a rating';
+                editRatingHint.style.opacity = '0.6';
+            }
+        });
+        //modal controls
+        closeEditModal.onclick = () => {
+            editModal.style.display = 'none';
+        };
+
+        cancelEditBtn.onclick = () => {
+            editModal.style.display = 'none';
+        };
+
+        window.onclick = (e) => {
+            if (e.target === editModal) {
+                editModal.style.display = 'none';
+            }
+        };
+
+        //handle study type selection (Add form)
         studyTypeSelect.addEventListener('change', () => {
             if (studyTypeSelect.value === '__custom__') {
                 customTypeInput.style.display = 'block';
@@ -217,12 +651,26 @@
             }
         });
 
-        // Date filter
+        //handle study type selection (Edit form)
+        editStudyTypeSelect.addEventListener('change', () => {
+            if (editStudyTypeSelect.value === '__custom__') {
+                editCustomTypeInput.style.display = 'block';
+                editCustomTypeInput.required = true;
+                editStudyTypeSelect.required = false;
+                editCustomTypeInput.focus();
+            } else {
+                editCustomTypeInput.style.display = 'none';
+                editCustomTypeInput.required = false;
+                editStudyTypeSelect.required = true;
+            }
+        });
+
+        //date filter
         dateFilter.addEventListener('change', () => {
             applyFilters();
         });
 
-        // Filter sessions by type
+        //filter sessions by type
         filterInput.addEventListener('input', () => {
             applyFilters();
         });
@@ -231,32 +679,52 @@
             const dateValue = dateFilter.value;
             const typeValue = filterInput.value.toLowerCase();
             const cards = sessionGrid.querySelectorAll('.session-card');
-            
+
             const now = new Date();
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const weekAgo = new Date(today);
-            weekAgo.setDate(weekAgo.getDate() - 7);
-            const monthAgo = new Date(today);
-            monthAgo.setDate(monthAgo.getDate() - 30);
+            const currentOffset = -now.getTimezoneOffset();
+            const currentOffsetMs = currentOffset * 60 * 1000;
+            
+            const nowInCurrentTz = new Date(now.getTime() + currentOffsetMs);
+            const todayStart = new Date(Date.UTC(nowInCurrentTz.getUTCFullYear(), nowInCurrentTz.getUTCMonth(), nowInCurrentTz.getUTCDate()));
+            const weekAgo = new Date(todayStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const monthAgo = new Date(todayStart.getTime() - 30 * 24 * 60 * 60 * 1000);
 
             cards.forEach(card => {
                 const type = card.dataset.type.toLowerCase();
                 const dateStr = card.dataset.createdAt;
-                const cardDate = dateStr ? new Date(dateStr) : null;
+                const offset = card.dataset.timezoneOffset;
 
                 let showByType = type.includes(typeValue);
                 let showByDate = true;
 
-                if (dateValue !== 'all' && cardDate) {
-                    switch(dateValue) {
+                if (dateValue !== 'all' && dateStr) {
+                    const utcDate = new Date(dateStr.includes('Z') ? dateStr : dateStr + 'Z');
+                    
+                    let createdLocalTime;
+                    if (offset && offset !== '+0:00') {
+                        const offsetMatch = offset.match(/^([+-])(\d+):(\d+)$/);
+                        if (offsetMatch) {
+                            const sign = offsetMatch[1] === '+' ? 1 : -1;
+                            const hours = parseInt(offsetMatch[2]);
+                            const mins = parseInt(offsetMatch[3]);
+                            const totalOffsetMs = sign * (hours * 60 + mins) * 60 * 1000;
+                            createdLocalTime = new Date(utcDate.getTime() + totalOffsetMs);
+                        } else {
+                            createdLocalTime = utcDate;
+                        }
+                    } else {
+                        createdLocalTime = utcDate;
+                    }
+
+                    switch (dateValue) {
                         case 'today':
-                            showByDate = cardDate >= today;
+                            showByDate = createdLocalTime >= todayStart;
                             break;
                         case 'week':
-                            showByDate = cardDate >= weekAgo;
+                            showByDate = createdLocalTime >= weekAgo;
                             break;
                         case 'month':
-                            showByDate = cardDate >= monthAgo;
+                            showByDate = createdLocalTime >= monthAgo;
                             break;
                     }
                 }
@@ -265,13 +733,13 @@
             });
         }
 
-        // Sort sessions
+        //sort sessions
         sortSelect.addEventListener('change', () => {
             const cards = Array.from(sessionGrid.querySelectorAll('.session-card'));
             const sortValue = sortSelect.value;
 
             cards.sort((a, b) => {
-                switch(sortValue) {
+                switch (sortValue) {
                     case 'newest':
                         return new Date(b.dataset.createdAt) - new Date(a.dataset.createdAt);
                     case 'oldest':
@@ -280,6 +748,10 @@
                         return Number(b.dataset.duration) - Number(a.dataset.duration);
                     case 'duration-low':
                         return Number(a.dataset.duration) - Number(b.dataset.duration);
+                    case 'rating-high':
+                        return Number(b.dataset.rating) - Number(a.dataset.rating);
+                    case 'rating-low':
+                        return Number(a.dataset.rating) - Number(b.dataset.rating);
                     case 'type':
                         return a.dataset.type.localeCompare(b.dataset.type);
                     default:
@@ -290,14 +762,14 @@
             cards.forEach(card => sessionGrid.appendChild(card));
         });
 
-        // Add session
+        //add session
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const formData = new FormData(form);
             const courseId = "{{ course[0] }}";
 
-            // Get the study type value
+            //get the study type value
             let studyType;
             if (studyTypeSelect.value === '__custom__') {
                 studyType = customTypeInput.value.trim();
@@ -314,6 +786,20 @@
                 }
             }
 
+            //check if rating is selected
+            const rating = formData.get('rating');
+            if (!rating) {
+                alert('Please rate your session');
+                return;
+            }
+
+            //add timezone offset in correct format
+            const timezoneOffset = new Date().getTimezoneOffset();
+            const offsetHours = Math.floor(-timezoneOffset / 60);
+            const offsetMinutes = Math.abs(timezoneOffset % 60);
+            const offsetString = `${offsetHours >= 0 ? '+' : ''}${offsetHours}:${offsetMinutes.toString().padStart(2, '0')}`;
+            formData.append('timezone_offset', offsetString);
+
             const response = await fetch(`/add_session/${courseId}`, {
                 method: 'POST',
                 body: formData
@@ -323,19 +809,24 @@
                 const newSession = await response.json();
                 sessionCounter++;
 
+                const ratingStars = '★'.repeat(newSession.rating) + '☆'.repeat(5 - newSession.rating);
+
                 const card = document.createElement('div');
                 card.className = 'session-card fade-in';
                 card.dataset.sessionId = newSession.id;
                 card.dataset.duration = newSession.duration;
                 card.dataset.type = newSession.type;
                 card.dataset.createdAt = newSession.created_at;
+                card.dataset.rating = newSession.rating;
+                card.dataset.timezoneOffset = newSession.timezone_offset;
                 card.dataset.timestamp = sessionCounter;
                 
                 card.innerHTML = `
                     <div class="session-content">
                         <div class="session-type">${newSession.type}</div>
                         <div class="session-duration">${newSession.duration} min</div>
-                        <div class="session-date">${formatDate(newSession.created_at)}</div>
+                        <div class="session-rating">${ratingStars}</div>
+                        <div class="session-date" data-raw-date="${newSession.created_at}" data-timezone="${newSession.timezone_offset}">${formatDate(newSession.created_at, newSession.timezone_offset)}</div>
                     </div>
                     <div class="session-card-actions">
                         <button class="edit-session-btn" title="Edit">✏️</button>
@@ -350,31 +841,49 @@
                 totalMinutesEl.textContent = formatTime(totalMinutes);
                 calculateTimeStats();
 
-                // Add new type to dropdown if it's custom and not already there
+                //add new type to dropdown if it's custom and not already there
                 if (!studyTypes.includes(newSession.type)) {
                     studyTypes.push(newSession.type);
                     studyTypes.sort();
                     
-                    // Rebuild dropdown
-                    const customOption = studyTypeSelect.querySelector('option[value="__custom__"]');
-                    studyTypeSelect.innerHTML = '<option value="">Select study type...</option>';
-                    studyTypes.forEach(type => {
-                        const option = document.createElement('option');
-                        option.value = type;
-                        option.textContent = type;
-                        studyTypeSelect.appendChild(option);
-                    });
-                    studyTypeSelect.appendChild(customOption);
+                    //rebuild both dropdowns
+                    rebuildDropdowns();
                 }
 
                 form.reset();
                 customTypeInput.style.display = 'none';
                 customTypeInput.required = false;
                 studyTypeSelect.required = true;
+                ratingHint.textContent = 'Select a rating';
+                ratingHint.style.opacity = '0.6';
             }
         });
 
-        // Edit and Delete session handlers
+        function rebuildDropdowns() {
+            //add form dropdown
+            const customOption = studyTypeSelect.querySelector('option[value="__custom__"]');
+            studyTypeSelect.innerHTML = '<option value="">Select study type...</option>';
+            studyTypes.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                studyTypeSelect.appendChild(option);
+            });
+            studyTypeSelect.appendChild(customOption);
+
+            //edit form dropdown
+            const editCustomOption = editStudyTypeSelect.querySelector('option[value="__custom__"]');
+            editStudyTypeSelect.innerHTML = '<option value="">Select study type...</option>';
+            studyTypes.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                editStudyTypeSelect.appendChild(option);
+            });
+            editStudyTypeSelect.appendChild(editCustomOption);
+        }
+
+        //edit and Delete session handlers
         sessionGrid.addEventListener('click', async (e) => {
             const card = e.target.closest('.session-card');
             if (!card) return;
@@ -382,7 +891,7 @@
             const sessionId = card.dataset.sessionId;
             const oldDuration = Number(card.dataset.duration);
 
-            // Delete session
+            //delete session
             if (e.target.classList.contains('delete-session-btn')) {
                 if (!confirm('Delete this session?')) return;
 
@@ -400,60 +909,585 @@
                 return;
             }
 
-            // Edit session
+            //edit session - open modal
             if (e.target.classList.contains('edit-session-btn')) {
+                currentEditSessionId = sessionId;
+                currentEditSessionCard = card;
+
                 const currentType = card.dataset.type;
-                
-                const newType = prompt('Edit study type (or enter new):', currentType);
-                if (newType === null) return;
+                const currentDuration = card.dataset.duration;
+                const currentRating = card.dataset.rating;
 
-                const newDuration = prompt('Edit duration (min):', oldDuration);
-                if (newDuration === null) return;
-
-                const duration = parseInt(newDuration);
-                if (isNaN(duration) || duration <= 0) {
-                    alert('Please enter a valid duration');
-                    return;
+                //populate form
+                if (studyTypes.includes(currentType)) {
+                    editStudyTypeSelect.value = currentType;
+                    editCustomTypeInput.style.display = 'none';
+                } else {
+                    editStudyTypeSelect.value = '__custom__';
+                    editCustomTypeInput.value = currentType;
+                    editCustomTypeInput.style.display = 'block';
                 }
 
-                const formData = new FormData();
-                formData.append('type', newType);
-                formData.append('duration', duration);
+                editDuration.value = currentDuration;
 
-                const response = await fetch(`/edit_session/${sessionId}`, {
+                //set the rating
+                if (currentRating && currentRating > 0) {
+                    const ratingInput = editFormRating.querySelector(`input[value="${currentRating}"]`);
+                    if (ratingInput) {
+                        ratingInput.checked = true;
+                        editRatingHint.textContent = ratingHints[currentRating];
+                        editRatingHint.style.opacity = '1';
+                    }
+                } else {
+                    //reset all stars
+                    editFormRating.querySelectorAll('input').forEach(input => {
+                        input.checked = false;
+                    });
+                    editRatingHint.textContent = 'Select a rating';
+                    editRatingHint.style.opacity = '0.6';
+                }
+
+                editModal.style.display = 'block';
+                return;
+            }
+        });
+
+        //submit edit form
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!currentEditSessionId || !currentEditSessionCard) return;
+
+            const formData = new FormData(editForm);
+            const oldDuration = Number(currentEditSessionCard.dataset.duration);
+
+            //get the study type value
+            let studyType;
+            if (editStudyTypeSelect.value === '__custom__') {
+                studyType = editCustomTypeInput.value.trim();
+                if (!studyType) {
+                    alert('Please enter a study type');
+                    return;
+                }
+                formData.set('type', studyType);
+            } else {
+                studyType = editStudyTypeSelect.value;
+                if (!studyType) {
+                    alert('Please select a study type');
+                    return;
+                }
+            }
+
+            const response = await fetch(`/edit_session/${currentEditSessionId}`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const duration = parseInt(formData.get('duration'));
+                const rating = parseInt(formData.get('rating'));
+                const ratingStars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+
+                currentEditSessionCard.querySelector('.session-type').textContent = studyType;
+                currentEditSessionCard.querySelector('.session-duration').textContent = `${duration} min`;
+                currentEditSessionCard.querySelector('.session-rating').textContent = ratingStars;
+                currentEditSessionCard.dataset.duration = duration;
+                currentEditSessionCard.dataset.type = studyType;
+                currentEditSessionCard.dataset.rating = rating;
+
+                totalMinutes = totalMinutes - oldDuration + duration;
+                totalMinutesEl.textContent = formatTime(totalMinutes);
+                calculateTimeStats();
+
+                //add new type to dropdown if not already there
+                if (!studyTypes.includes(studyType)) {
+                    studyTypes.push(studyType);
+                    studyTypes.sort();
+                    rebuildDropdowns();
+                }
+
+                editModal.style.display = 'none';
+                currentEditSessionId = null;
+                currentEditSessionCard = null;
+            }
+        });
+
+        //exam handling
+        const examForm = document.getElementById('add-exam-form');
+        const examGrid = document.getElementById('exam-grid');
+        const editExamModal = document.getElementById('edit-exam-modal');
+        const editExamForm = document.getElementById('edit-exam-form');
+        const closeExamModal = document.getElementById('close-exam-modal');
+        const cancelExamBtn = document.getElementById('cancel-exam-btn');
+        const examTypeSelect = document.getElementById('exam-type-select');
+        const examWeightInput = document.getElementById('exam-weight-input');
+        let currentEditExamId = null;
+
+        console.log('Exam form element:', examForm);
+        console.log('Exam type select:', examTypeSelect);
+        console.log('Exam weight input:', examWeightInput);
+
+        //show recommended weight as placeholder based on exam type
+        const defaultWeights = {
+            'Quiz': 5,
+            'Assignment': 10,
+            'Test': 15,
+            'Project': 20,
+            'Midterm': 25,
+            'Final': 35
+        };
+
+        examTypeSelect.addEventListener('change', () => {
+            const type = examTypeSelect.value;
+            if (defaultWeights[type]) {
+                examWeightInput.placeholder = `Recommended: ${defaultWeights[type]}%`;
+                examWeightInput.value = '';
+            } else {
+                examWeightInput.placeholder = 'Weight % (e.g., 15 for 15%)';
+            }
+        });
+
+        //exam modal controls
+        closeExamModal.onclick = () => {
+            editExamModal.style.display = 'none';
+        };
+
+        cancelExamBtn.onclick = () => {
+            editExamModal.style.display = 'none';
+        };
+
+        window.addEventListener('click', (e) => {
+            if (e.target === editExamModal) {
+                editExamModal.style.display = 'none';
+            }
+        });
+
+        //add exam
+        examForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('Exam form submitted via JavaScript');
+
+            const formData = new FormData(examForm);
+            const courseId = "{{ course[0] }}";
+
+            //add timezone offset
+            const timezoneOffset = new Date().getTimezoneOffset();
+            const offsetHours = Math.floor(-timezoneOffset / 60);
+            const offsetMinutes = Math.abs(timezoneOffset % 60);
+            const offsetString = `${offsetHours >= 0 ? '+' : ''}${offsetHours}:${offsetMinutes.toString().padStart(2, '0')}`;
+            formData.append('timezone_offset', offsetString);
+
+            try {
+                const response = await fetch(`/add_exam/${courseId}`, {
                     method: 'POST',
                     body: formData
                 });
 
-                if (response.ok) {
-                    card.querySelector('.session-type').textContent = newType;
-                    card.querySelector('.session-duration').textContent = `${duration} min`;
-                    card.dataset.duration = duration;
-                    card.dataset.type = newType;
-                    
-                    totalMinutes = totalMinutes - oldDuration + duration;
-                    totalMinutesEl.textContent = formatTime(totalMinutes);
-                    calculateTimeStats();
+                if (!response.ok) {
+                    throw new Error('Failed to add exam');
+                }
 
-                    // Add new type to dropdown if not already there
-                    if (!studyTypes.includes(newType)) {
-                        studyTypes.push(newType);
-                        studyTypes.sort();
-                        
-                        const customOption = studyTypeSelect.querySelector('option[value="__custom__"]');
-                        studyTypeSelect.innerHTML = '<option value="">Select study type...</option>';
-                        studyTypes.forEach(type => {
-                            const option = document.createElement('option');
-                            option.value = type;
-                            option.textContent = type;
-                            studyTypeSelect.appendChild(option);
-                        });
-                        studyTypeSelect.appendChild(customOption);
-                    }
+                const newExam = await response.json();
+                console.log('New exam:', newExam);
+
+                const card = document.createElement('div');
+                card.className = 'exam-card fade-in';
+                card.dataset.examId = newExam.id;
+                card.dataset.grade = newExam.grade;
+                card.dataset.maxGrade = newExam.max_grade;
+                card.dataset.weight = newExam.weight;
+                
+                card.innerHTML = `
+                    <div class="exam-content">
+                        <div class="exam-header">
+                            <div class="exam-type-badge">${newExam.exam_type}</div>
+                            <div class="exam-weight-badge">${newExam.weight}%</div>
+                        </div>
+                        <div class="exam-name">${newExam.exam_name}</div>
+                        <div class="exam-grade">
+                            ${newExam.grade}/${newExam.max_grade}
+                            <span class="exam-percentage">(${newExam.percentage}%)</span>
+                        </div>
+                        <div class="exam-date">${newExam.exam_date}</div>
+                    </div>
+                    <div class="exam-card-actions">
+                        <button class="edit-exam-btn" title="Edit">✏️</button>
+                        <button class="delete-exam-btn" title="Delete">🗑️</button>
+                    </div>
+                `;
+                
+                examGrid.prepend(card);
+                examForm.reset();
+                
+            } catch (error) {
+                console.error('Error adding exam:', error);
+                alert('Failed to add exam. Please try again.');
+            }
+        });
+
+        //edit and Delete exam handlers
+        examGrid.addEventListener('click', async (e) => {
+            const card = e.target.closest('.exam-card');
+            if (!card) return;
+
+            const examId = card.dataset.examId;
+
+            //delete exam
+            if (e.target.classList.contains('delete-exam-btn')) {
+                if (!confirm('Delete this exam?')) return;
+
+                const response = await fetch(`/delete_exam/${examId}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    card.remove();
                 }
                 return;
             }
+
+            // Edit exam - open modal
+            if (e.target.classList.contains('edit-exam-btn')) {
+                currentEditExamId = examId;
+
+                const examType = card.querySelector('.exam-type-badge').textContent;
+                const examName = card.querySelector('.exam-name').textContent;
+                const grade = card.dataset.grade;
+                const maxGrade = card.dataset.maxGrade;
+                const weight = card.dataset.weight || 0;
+                const examDate = card.querySelector('.exam-date').textContent;
+
+                document.getElementById('edit-exam-type').value = examType;
+                document.getElementById('edit-exam-name').value = examName;
+                document.getElementById('edit-grade').value = grade;
+                document.getElementById('edit-max-grade').value = maxGrade;
+                document.getElementById('edit-weight').value = weight;
+                document.getElementById('edit-exam-date').value = examDate;
+
+                editExamModal.style.display = 'block';
+                return;
+            }
         });
+
+        //submit edit exam form
+        editExamForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!currentEditExamId) return;
+
+            const formData = new FormData(editExamForm);
+            const card = document.querySelector(`[data-exam-id="${currentEditExamId}"]`);
+
+            const response = await fetch(`/edit_exam/${currentEditExamId}`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const examType = formData.get('exam_type');
+                const examName = formData.get('exam_name');
+                const grade = parseFloat(formData.get('grade'));
+                const maxGrade = parseFloat(formData.get('max_grade'));
+                const weight = parseFloat(formData.get('weight'));
+                const examDate = formData.get('exam_date');
+                const percentage = maxGrade > 0 ? ((grade / maxGrade) * 100).toFixed(1) : 0;
+
+                card.querySelector('.exam-type-badge').textContent = examType;
+                card.querySelector('.exam-weight-badge').textContent = weight + '%';
+                card.querySelector('.exam-name').textContent = examName;
+                card.querySelector('.exam-grade').innerHTML = `
+                    ${grade}/${maxGrade}
+                    <span class="exam-percentage">(${percentage}%)</span>
+                `;
+                card.querySelector('.exam-date').textContent = examDate;
+                card.dataset.grade = grade;
+                card.dataset.maxGrade = maxGrade;
+                card.dataset.weight = weight;
+
+                editExamModal.style.display = 'none';
+                currentEditExamId = null;
+            }
+        });
+
+        //insights handling
+        const insightsModal = document.getElementById('insights-modal');
+        const viewInsightsBtn = document.getElementById('view-insights-btn');
+        const closeInsightsModal = document.getElementById('close-insights-modal');
+        const insightsLoading = document.getElementById('insights-loading');
+        const insightsContent = document.getElementById('insights-content');
+
+        closeInsightsModal.onclick = () => {
+            insightsModal.style.display = 'none';
+        };
+
+        window.addEventListener('click', (e) => {
+            if (e.target === insightsModal) {
+                insightsModal.style.display = 'none';
+            }
+        });
+
+        let insightsCharts = {};
+
+        viewInsightsBtn.addEventListener('click', async () => {
+            insightsModal.style.display = 'block';
+            insightsLoading.style.display = 'block';
+            insightsContent.style.display = 'none';
+
+            try {
+                //fetch insights
+                const response = await fetch(`/get_insights/{{ course[0] }}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                console.log('Insights data:', data);
+
+                //destroy existing charts
+                Object.values(insightsCharts).forEach(chart => chart.destroy());
+                insightsCharts = {};
+
+                //populate insights
+                populateInsights(data);
+
+                insightsLoading.style.display = 'none';
+                insightsContent.style.display = 'block';
+            } catch (error) {
+                console.error('Error fetching insights:', error);
+                insightsLoading.innerHTML = `
+                    <p style="color: red;">Error loading insights: ${error.message}</p>
+                    <p>Check the browser console and Flask terminal for details.</p>
+                `;
+            }
+        });
+
+        function populateInsights(data) {
+            //performance
+            if (data.performance && !data.performance.no_exams) {
+                document.getElementById('avg-score').textContent = data.performance.avg_score + '%';
+                document.getElementById('best-score').textContent = data.performance.best_score + '%';
+                document.getElementById('trend').textContent = data.performance.trend_text || '--';
+                document.getElementById('performance-section').style.display = 'block';
+
+                // Exam timeline chart
+                if (data.performance.exam_timeline && data.performance.exam_timeline.length > 0) {
+                    const ctx = document.getElementById('exam-timeline-chart').getContext('2d');
+                    insightsCharts.examTimeline = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.performance.exam_timeline.map(e => e.name),
+                            datasets: [{
+                                label: 'Exam Score (%)',
+                                data: data.performance.exam_timeline.map(e => e.score),
+                                borderColor: '#000000',
+                                backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                                tension: 0.3,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    ticks: { callback: value => value + '%' }
+                                }
+                            }
+                        }
+                    });
+                }
+            } else {
+                document.getElementById('performance-section').style.display = 'none';
+            }
+
+            //study patterns
+            if (data.study_patterns) {
+                if (data.study_patterns.best_day) {
+                    document.getElementById('best-day').textContent = data.study_patterns.best_day;
+                    document.getElementById('best-day-rating').textContent = 
+                        data.study_patterns.best_day_avg_rating + '★ avg';
+                }
+
+                if (data.study_patterns.best_time) {
+                    document.getElementById('best-time').textContent = data.study_patterns.best_time;
+                    document.getElementById('best-time-rating').textContent = 
+                        data.study_patterns.best_time_avg_rating + '★ avg';
+                }
+
+                document.getElementById('current-streak').textContent = 
+                    data.study_patterns.current_streak >= 1 
+                    ? `🔥 ${data.study_patterns.current_streak} ${data.study_patterns.current_streak === 1 ? 'day' : 'days'}`
+                    : 'None';
+
+                //day breakdown chart
+                if (data.study_patterns.day_breakdown) {
+                    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                    const dayData = days.map(day => 
+                        data.study_patterns.day_breakdown[day]?.avg_rating || 0
+                    );
+
+                    const ctx = document.getElementById('day-breakdown-chart').getContext('2d');
+                    insightsCharts.dayBreakdown = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: days.map(d => d.substring(0, 3)),
+                            datasets: [{
+                                label: 'Avg Rating',
+                                data: dayData,
+                                backgroundColor: '#000000'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 5,
+                                    ticks: { stepSize: 1 }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Effectiveness
+            if (data.effectiveness) {
+                if (data.effectiveness.best_type) {
+                    document.getElementById('best-type').textContent = data.effectiveness.best_type;
+                    document.getElementById('best-type-rating').textContent = 
+                        data.effectiveness.best_type_rating + '★ avg';
+                }
+
+                if (data.effectiveness.optimal_duration) {
+                    document.getElementById('optimal-duration').textContent = data.effectiveness.optimal_duration;
+                    document.getElementById('optimal-duration-rating').textContent = 
+                        data.effectiveness.optimal_duration_rating + '★ avg';
+                }
+
+                // Study type effectiveness chart
+                if (data.effectiveness.study_types && data.effectiveness.study_types.length > 0) {
+                    const ctx = document.getElementById('study-type-chart').getContext('2d');
+                    insightsCharts.studyTypes = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.effectiveness.study_types.map(t => t.type),
+                            datasets: [{
+                                label: 'Avg Rating',
+                                data: data.effectiveness.study_types.map(t => t.avg_rating),
+                                backgroundColor: '#000000'
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: {
+                                    beginAtZero: true,
+                                    max: 5
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Correlation chart
+                if (data.effectiveness.exam_correlations && data.effectiveness.exam_correlations.length >= 2) {
+                    document.getElementById('correlation-chart-container').style.display = 'block';
+                    const ctx = document.getElementById('correlation-chart').getContext('2d');
+                    insightsCharts.correlation = new Chart(ctx, {
+                        type: 'scatter',
+                        data: {
+                            datasets: [{
+                                label: 'Exams',
+                                data: data.effectiveness.exam_correlations.map(e => ({
+                                    x: e.study_hours,
+                                    y: e.score
+                                })),
+                                backgroundColor: '#000000',
+                                pointRadius: 6
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => {
+                                            const exam = data.effectiveness.exam_correlations[context.dataIndex];
+                                            return `${exam.exam_name}: ${exam.study_hours}hrs → ${exam.score}%`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    title: { display: true, text: 'Study Hours (before exam)' }
+                                },
+                                y: {
+                                    title: { display: true, text: 'Exam Score (%)' },
+                                    beginAtZero: true,
+                                    max: 100
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Recommendations
+            if (data.recommendations && data.recommendations.length > 0) {
+                const recList = document.getElementById('recommendations-list');
+                recList.innerHTML = '';
+                
+                data.recommendations.forEach(rec => {
+                    const recDiv = document.createElement('div');
+                    recDiv.className = `recommendation-item recommendation-${rec.type}`;
+                    
+                    let confidenceBadge = '';
+                    if (rec.confidence) {
+                        const confidenceColor = rec.confidence === 'high' ? '#22c55e' : rec.confidence === 'medium' ? '#f59e0b' : '#94a3b8';
+                        confidenceBadge = `<span class="confidence-badge" style="background: ${confidenceColor};">${rec.confidence} confidence</span>`;
+                    }
+                    
+                    recDiv.innerHTML = `
+                        <div class="rec-main">
+                            <span class="rec-icon">${rec.icon}</span>
+                            <div class="rec-content">
+                                <span class="rec-text">${rec.text}</span>
+                                ${rec.evidence ? `<div class="rec-evidence">📌 ${rec.evidence}</div>` : ''}
+                                ${confidenceBadge}
+                            </div>
+                        </div>
+                    `;
+                    recList.appendChild(recDiv);
+                });
+            }
+
+            //predictions
+            if (data.predictions && data.predictions.next_exam_score) {
+                document.getElementById('predictions-section').style.display = 'block';
+                document.getElementById('prediction-text').textContent = 
+                    `Based on your recent study (${data.predictions.based_on_hours} hours in last 14 days), predicted next exam score: ${data.predictions.next_exam_score}%`;
+            } else {
+                document.getElementById('predictions-section').style.display = 'none';
+            }
+        }
     </script>
 </body>
 

@@ -4,14 +4,16 @@
 <head>
     <title>Study Tracker</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <!-- Add Cropper.js library -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
 </head>
 
 <body>
     <div class="container">
-        <h1>Your Courses</h1>
+        <div class="header-with-analytics">
+            <h1>Your Courses</h1>
+            <a href="/analytics" class="analytics-link">📊 View Analytics</a>
+        </div>
 
         <form id="add-course-form" action="/add_course" method="post">
             <input name="name" placeholder="Course name" required autocomplete="off">
@@ -37,7 +39,6 @@
         </div>
     </div>
 
-    <!-- Image Upload Modal -->
     <div id="image-modal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
@@ -75,7 +76,7 @@
         let currentCourseId = null;
         let cropper = null;
 
-        // Modal controls
+        //modal controls
         closeModal.onclick = () => {
             modal.style.display = 'none';
             resetModal();
@@ -103,7 +104,7 @@
             currentCourseId = null;
         }
 
-        // Image upload handling
+        //image upload handling
         imageUpload.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -113,14 +114,14 @@
                 cropContainer.style.display = 'block';
                 cropImage.src = event.target.result;
 
-                // Destroy existing cropper if any
+                //destroy existing cropper if any
                 if (cropper) {
                     cropper.destroy();
                 }
 
-                // Initialize Cropper.js with 400:150 aspect ratio to match card
+                //initialize Cropper.js with 400:150 aspect ratio to match card
                 cropper = new Cropper(cropImage, {
-                    aspectRatio: 400 / 150, // Width:Height ratio matching the course card display
+                    aspectRatio: 400 / 150, 
                     viewMode: 2,
                     dragMode: 'move',
                     autoCropArea: 0.8,
@@ -136,11 +137,11 @@
             reader.readAsDataURL(file);
         });
 
-        // Crop and save
+        //crop and save
         cropBtn.addEventListener('click', async () => {
             if (!cropper || !currentCourseId) return;
 
-            // Get cropped canvas with the same aspect ratio
+            //get cropped canvas with the same aspect ratio
             const canvas = cropper.getCroppedCanvas({
                 width: 400,
                 height: 150, // Match the aspect ratio
@@ -148,7 +149,7 @@
                 imageSmoothingQuality: 'high',
             });
 
-            // Convert to blob
+            //convert to blob
             canvas.toBlob(async (blob) => {
                 const formData = new FormData();
                 formData.append('image', blob, 'course-image.jpg');
@@ -161,7 +162,7 @@
                 if (response.ok) {
                     const data = await response.json();
 
-                    // Update image in the card
+                    //update image in the card
                     const card = document.querySelector(`[data-course-id="${currentCourseId}"]`);
                     if (card) {
                         const img = card.querySelector('.course-icon');
@@ -174,14 +175,14 @@
             }, 'image/jpeg', 0.9);
         });
 
-        // Course card click handlers
+        //course card click handlers
         courseGrid.addEventListener('click', async (e) => {
             const card = e.target.closest('.course-card');
             if (!card) return;
 
             const courseId = card.dataset.courseId;
 
-            // Delete
+            //delete
             if (e.target.classList.contains('delete-btn')) {
                 e.stopPropagation();
                 if (!confirm('Delete this course and all sessions?')) return;
@@ -191,7 +192,7 @@
                 return;
             }
 
-            // Edit name
+            //edit name
             if (e.target.classList.contains('edit-btn')) {
                 e.stopPropagation();
                 const nameEl = card.querySelector('.course-name');
@@ -210,7 +211,7 @@
                 return;
             }
 
-            // Change image
+            //change image
             if (e.target.classList.contains('image-btn')) {
                 e.stopPropagation();
                 currentCourseId = courseId;
@@ -218,11 +219,11 @@
                 return;
             }
 
-            // Navigate to course
+            //navigate to course
             window.location.href = `/course/${courseId}`;
         });
 
-        // Add course
+        //add course
         courseForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 

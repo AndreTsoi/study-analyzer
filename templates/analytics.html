@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Analytics - Study Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <a href="/" class="back-btn">← Back to Courses</a>
+    <h1>Study Analytics</h1>
+
+    <!-- Summary Stats -->
+    <div class="analytics-summary">
+        <div class="summary-card">
+            <div class="summary-label">Total Sessions</div>
+            <div class="summary-value">{{ total_sessions }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">Total Study Time</div>
+            <div class="summary-value" id="total-time">{{ total_minutes }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-label">Average Rating</div>
+            <div class="summary-value">{{ avg_rating }} <span class="rating-star">★</span></div>
+        </div>
+    </div>
+
+    <!-- Report Generation -->
+    <div class="report-section">
+        <h2>Generate Report</h2>
+        <div class="report-grid">
+            <div class="report-type-section">
+                <h3>Weekly Report (Last 7 Days)</h3>
+                <div class="report-format-buttons">
+                    <button onclick="generateReport('weekly', 'docx')" class="report-btn">📄 Word</button>
+                    <button onclick="generateReport('weekly', 'pdf')" class="report-btn">📕 PDF</button>
+                </div>
+            </div>
+            <div class="report-type-section">
+                <h3>Monthly Report (Last 30 Days)</h3>
+                <div class="report-format-buttons">
+                    <button onclick="generateReport('monthly', 'docx')" class="report-btn">📄 Word</button>
+                    <button onclick="generateReport('monthly', 'pdf')" class="report-btn">📕 PDF</button>
+                </div>
+            </div>
+            <div class="report-type-section">
+                <h3>Yearly Report (Last 365 Days)</h3>
+                <div class="report-format-buttons">
+                    <button onclick="generateReport('yearly', 'docx')" class="report-btn">📄 Word</button>
+                    <button onclick="generateReport('yearly', 'pdf')" class="report-btn">📕 PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-container">
+        <div class="chart-card">
+            <h3>Study Time by Day (Last 30 Days)</h3>
+            <canvas id="timeByDayChart"></canvas>
+        </div>
+
+        <div class="chart-row">
+            <div class="chart-card chart-half">
+                <h3>Study Time by Course</h3>
+                <canvas id="timeByCourseChart"></canvas>
+            </div>
+
+            <div class="chart-card chart-half">
+                <h3>Study Time by Type</h3>
+                <canvas id="timeByTypeChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h3>Rating Trends Over Time</h3>
+            <canvas id="ratingTrendChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const sessions = {{ sessions | tojson }};
+
+        function formatTime(minutes) {
+            minutes = Math.floor(minutes);
+            if (minutes < 60) return `${minutes} min`;
+            if (minutes < 1440) {
+                const hrs = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                return mins > 0 ? `${hrs} hr ${mins} min` : `${hrs} hr`;
+            }
+            const days = Math.floor(minutes / 1440);
+            const hrs = Math.floor((minutes % 1440) / 60);
+            return hrs > 0 ? `${days} day ${hrs} hr` : `${days} day`;
+        }
+
+        // Format total time
+        document.getElementById('total-time').textContent = formatTime({{ total_minutes }});
+
+        // Helper to parse dates with timezone offset
+        function parseSessionDate(dateString, offset) {
+            const utcDate = new Date(dateString.includes('Z') ? dateString : dateString + 'Z');
+            
+            if (offset && offset !== '+0:00') {
+                const offsetMatch = offset.match(/^([+-])(\d+):(\d+)$/);
+                if (offsetMatch) {
+                    const sign = offsetMatch[1] === '+' ? 1 : -1;
+                    const hours = parseInt(offsetMatch[2]);
+                    const minutes = parseInt(offsetMatch[3]);
+                    const totalOffsetMs = sign * (hours * 60 + minutes) * 60 * 1000;
+                    return new Date(utcDate.getTime() + totalOffsetMs);
+                }
+            }
+            return utcDate;
+        }
+
+        // 1. Study Time by Day (Last 30 Days)
+        function createTimeByDayChart() {
+            const last30Days = [];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            for (let i = 29; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                last30Days.push({
+                    date: date,
+                    label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                    minutes: 0
+                });
+            }
+
+            sessions.forEach(s => {
+                const sessionDate = parseSessionDate(s[4], s[6]);
+                sessionDate.setHours(0, 0, 0, 0);
+                
+                const dayIndex = last30Days.findIndex(d => d.date.getTime() === sessionDate.getTime());
+                if (dayIndex !== -1) {
+                    last30Days[dayIndex].minutes += s[3];
+                }
+            });
+
+            const ctx = document.getElementById('timeByDayChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: last30Days.map(d => d.label),
+                    datasets: [{
+                        label: 'Study Time (minutes)',
+                        data: last30Days.map(d => d.minutes),
+                        borderColor: '#000000',
+                        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    if (value >= 60) {
+                                        return (value / 60).toFixed(1) + ' hr';
+                                    }
+                                    return value + ' min';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 2. Study Time by Course
+        function createTimeByCourseChart() {
+            const courseData = {};
+            sessions.forEach(s => {
+                const courseName = s[7]; // course_name from JOIN
+                if (!courseData[courseName]) {
+                    courseData[courseName] = 0;
+                }
+                courseData[courseName] += s[3];
+            });
+
+            const sortedCourses = Object.entries(courseData)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            const ctx = document.getElementById('timeByCourseChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: sortedCourses.map(c => c[0]),
+                    datasets: [{
+                        data: sortedCourses.map(c => c[1]),
+                        backgroundColor: [
+                            '#000000', '#333333', '#4d4d4d', '#666666', '#808080',
+                            '#999999', '#b3b3b3', '#cccccc', '#d9d9d9', '#e6e6e6'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    return data.labels.map((label, i) => {
+                                        const value = data.datasets[0].data[i];
+                                        return {
+                                            text: `${label} (${formatTime(value)})`,
+                                            fillStyle: data.datasets[0].backgroundColor[i],
+                                            hidden: false,
+                                            index: i
+                                        };
+                                    });
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return formatTime(context.raw);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 3. Study Time by Type
+        function createTimeByTypeChart() {
+            const typeData = {};
+            sessions.forEach(s => {
+                const type = s[2];
+                if (!typeData[type]) {
+                    typeData[type] = 0;
+                }
+                typeData[type] += s[3];
+            });
+
+            const sortedTypes = Object.entries(typeData)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            const ctx = document.getElementById('timeByTypeChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: sortedTypes.map(t => t[0]),
+                    datasets: [{
+                        data: sortedTypes.map(t => t[1]),
+                        backgroundColor: [
+                            '#000000', '#333333', '#4d4d4d', '#666666', '#808080',
+                            '#999999', '#b3b3b3', '#cccccc', '#d9d9d9', '#e6e6e6'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    return data.labels.map((label, i) => {
+                                        const value = data.datasets[0].data[i];
+                                        return {
+                                            text: `${label} (${formatTime(value)})`,
+                                            fillStyle: data.datasets[0].backgroundColor[i],
+                                            hidden: false,
+                                            index: i
+                                        };
+                                    });
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return formatTime(context.raw);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 4. Rating Trends Over Time
+        function createRatingTrendChart() {
+            const ratedSessions = sessions
+                .filter(s => s[5] > 0)
+                .map(s => ({
+                    date: parseSessionDate(s[4], s[6]),
+                    rating: s[5]
+                }))
+                .sort((a, b) => a.date - b.date);
+
+            if (ratedSessions.length === 0) {
+                const canvas = document.getElementById('ratingTrendChart');
+                const parent = canvas.parentElement;
+                parent.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">No rated sessions yet</p>';
+                return;
+            }
+
+            // Group by week
+            const weeks = {};
+            ratedSessions.forEach(s => {
+                const weekStart = new Date(s.date);
+                weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+                weekStart.setHours(0, 0, 0, 0);
+                const weekKey = weekStart.toISOString().split('T')[0];
+                
+                if (!weeks[weekKey]) {
+                    weeks[weekKey] = { ratings: [], date: weekStart };
+                }
+                weeks[weekKey].ratings.push(s.rating);
+            });
+
+            const weekData = Object.entries(weeks)
+                .map(([key, val]) => ({
+                    label: val.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                    avg: val.ratings.reduce((a, b) => a + b, 0) / val.ratings.length
+                }))
+                .sort((a, b) => weeks[a.label]?.date - weeks[b.label]?.date);
+
+            const ctx = document.getElementById('ratingTrendChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: weekData.map(w => w.label),
+                    datasets: [{
+                        label: 'Average Rating',
+                        data: weekData.map(w => w.avg),
+                        borderColor: '#000000',
+                        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 5,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialize charts
+        createTimeByDayChart();
+        createTimeByCourseChart();
+        createTimeByTypeChart();
+        createRatingTrendChart();
+
+        // Generate Report Function
+        async function generateReport(type, format) {
+            const formData = new FormData();
+            formData.append('type', type);
+            formData.append('format', format);
+
+            try {
+                const response = await fetch('/generate_report', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Create a temporary link to download the file
+                    const a = document.createElement('a');
+                    a.href = data.download_url;
+                    a.download = data.filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    const formatName = format === 'pdf' ? 'PDF' : 'Word';
+                    alert(`${formatName} report downloaded successfully!`);
+                } else {
+                    alert('Error generating report: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error generating report: ' + error.message);
+            }
+        }
+    </script>
+</body>
+
+</html>
