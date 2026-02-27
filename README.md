@@ -154,4 +154,35 @@ All recommendations include confidence scoring:
 - **Medium**: 3-4 data points, likely pattern
 - **Low**: 2-3 data points, possible pattern but needs more data
 
-## File Structure
+## Key Features Implementation
+
+### Weighted Grading
+Exams are weighted by percentage (e.g., Quiz 5%, Midterm 25%, Final 40%). Course grade = sum(score × weight) / sum(weights).
+
+### Timezone Handling
+Sessions store timezone offset at creation time, preserving accurate timestamps across different locations.
+
+### Smart Recommendations
+Each insight shows:
+- The finding (what we discovered)
+- The evidence (data supporting it)
+- Confidence level (how certain we are)
+- Sample size (number of data points)
+
+### Auto-Suggested Weights
+Default weights by exam type:
+- Quiz: 5%
+- Assignment: 10%
+- Test: 15%
+- Project: 20%
+- Midterm: 25%
+- Final: 35%
+
+## Future Enhancements
+
+- Multi-user support with authentication
+- Cloud database sync
+- Mobile app version
+- Export/import data (CSV/JSON)
+- Goal setting and progress tracking
+- Email report delivery
