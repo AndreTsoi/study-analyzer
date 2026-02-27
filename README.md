@@ -1,7 +1,7 @@
 # study-analyzer
 
 
-# Study Tracker
+# Study Analyzer
 
 A full-stack web application for tracking study sessions, managing exams, and analyzing study patterns with intelligent insights.
 
